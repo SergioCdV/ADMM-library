@@ -107,7 +107,7 @@ classdef ADMM_solver
                 u = u + (xh - z(:,iter+1));
                 
                 % Convergence analysis 
-                Output.objval(iter) = obj.objective(x(:,iter));
+                Output.objval(iter) = feval(obj.objective, x(:,iter+1), z(:,iter+1));
                 Output.r_norm(iter) = norm(obj.A * x(:,iter+1) + obj.B * z(:,iter+1) - obj.C);
                 Output.s_norm(iter) = norm(obj.rho * obj.A.' * obj.B * (z(:,iter+1) - z(:,iter)));
             

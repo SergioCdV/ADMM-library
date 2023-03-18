@@ -36,7 +36,7 @@ c = zeros(size(A,2),1);
 rho = 1;
 
 % Create the functions to be solved 
-objective = @(x)norm(x,1);
+objective = @(x,z)norm(x,1);
 X_update = @(x,z,u)(P*(z - u) + q);
 Z_update = @(x,z,u)(max(0, x+u-1/rho) - max(0, -x-u-1/rho));
 
