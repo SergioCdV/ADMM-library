@@ -56,7 +56,7 @@ classdef ADMM_solver
         function [obj] = initADMM(obj)
             % Dimensions of the problem
             obj.m = size(obj.A,1);
-            obj.n = size(obj.B,1);
+            obj.n = size(obj.A,2);
         end
 
         % Options
@@ -83,14 +83,31 @@ classdef ADMM_solver
         end
 
         % Main solver
-        function [x, z, Output] = solver(obj)
+        function [x,z,Output] = solver(obj)
+            if ( isequal(obj.A,eye(size(obj.A,1))) && isequal(obj.B,-eye(size(obj.B,1))) && isequal(obj.C, zeros(size(obj.C,1),1)) )
+                solver_type = 'Eye';
+            else
+                solver_type = 'General';
+            end
+ 
+            switch (solver_type)
+                case 'Eye'
+                    [x,z,Output] = eye_solver(obj);
+                otherwise
+                    [x,z,Output] = general_solver(obj);
+            end
+        end
+    end
+
+    methods (Access = private)
+        function [x, z, Output] = general_solver(obj)
             % Initialization 
             iter = 1; 
             GoOn = true;
 
             x = zeros(obj.n,obj.MaxIter+1);
-            z = zeros(obj.n,obj.MaxIter+1);
-            u = zeros(obj.n,1);
+            z = zeros(obj.m,obj.MaxIter+1);
+            u = zeros(obj.m,1);
             
             tic;
             % Solver
@@ -104,7 +121,7 @@ classdef ADMM_solver
                 z(:,iter+1) = feval(obj.Z_update, xh, z(:,iter), u);
 
                 % Compute the residuals and update the 
-                u = u + (xh - z(:,iter+1));
+                u = u + (xh + obj.B * z(:,iter+1) - obj.C);
                 
                 % Convergence analysis 
                 Output.objval(iter) = feval(obj.objective, x(:,iter+1), z(:,iter+1));
@@ -113,6 +130,69 @@ classdef ADMM_solver
             
                 Output.eps_pri(iter) =  sqrt(obj.n) * obj.AbsTol + obj.RelTol * max([norm(obj.C) norm(obj.A * x(:,iter+1)), norm(obj.B * z(:,iter+1))]);
                 Output.eps_dual(iter) = sqrt(obj.n) * obj.AbsTol + obj.RelTol * norm(obj.rho * obj.A.' * u);
+
+                if (obj.QUIET)
+                    if (iter == 1)
+                        fprintf('%3s\t%10s\t%10s\t%10s\t%10s\t%10s\n', 'iter', 'r norm', 'eps pri', 's norm', 'eps dual', 'objective');
+                        fprintf('-----------------------------------------------------------------------------------\n');
+                        fprintf('%3d\t%10.4f\t%10.4f\t%10.4f\t%10.4f\t%10.2f\n', iter, Output.r_norm(iter), Output.eps_pri(iter), Output.s_norm(iter), Output.eps_dual(iter), Output.objval(iter));
+                    else
+                        fprintf('%3d\t%10.4f\t%10.4f\t%10.4f\t%10.4f\t%10.2f\n', iter, Output.r_norm(iter), Output.eps_pri(iter), Output.s_norm(iter), Output.eps_dual(iter), Output.objval(iter));
+                    end
+                end
+
+                % Update the state machine
+                if (Output.r_norm(iter) < Output.eps_pri(iter) && Output.s_norm(iter) < Output.eps_dual(iter))
+                    GoOn = false;
+                else
+                    iter = iter + 1;
+                end
+            end
+
+            % Final results 
+            Output.Time = toc;
+            Output.Result = ~GoOn; 
+            Output.Iterations = iter;
+            
+            if (GoOn)
+                x = x(:,1:iter-1); 
+                z = z(:,1:iter-1);
+            else
+                x = x(:,1:iter); 
+                z = z(:,1:iter);
+            end
+        end
+
+        function [x, z, Output] = eye_solver(obj)
+            % Initialization 
+            iter = 1; 
+            GoOn = true;
+
+            x = zeros(obj.n,obj.MaxIter+1);
+            z = zeros(obj.m,obj.MaxIter+1);
+            u = zeros(obj.m,1);
+            
+            tic;
+            % Solver
+            while (GoOn && iter <= obj.MaxIter)
+                % X update
+                x(:,iter+1) = feval(obj.X_update, x(:,iter), z(:,iter), u);
+
+                % Z update with relaxation
+                zold = -z(:,iter);
+                xh = obj.alpha * x(:,iter+1) - (1-obj.alpha) * zold;
+                z(:,iter+1) = feval(obj.Z_update, xh, z(:,iter), u);
+
+                % Compute the residuals and update the 
+                u = u + (xh - z(:,iter+1));
+                
+                % Convergence analysis 
+                Output.objval(iter) = feval(obj.objective, x(:,iter+1), z(:,iter+1));
+                Output.r_norm(iter) = norm(x(:,iter+1) - z(:,iter+1));
+                Output.s_norm(iter) = norm(-obj.rho * (z(:,iter+1) - z(:,iter)));
+            
+                Output.eps_pri(iter) =  sqrt(obj.n) * obj.AbsTol + obj.RelTol * max([norm(x(:,iter+1)), norm(z(:,iter+1))]);
+                Output.eps_dual(iter) = sqrt(obj.n) * obj.AbsTol + obj.RelTol * norm(obj.rho * u);
 
                 if (obj.QUIET)
                     if (iter == 1)

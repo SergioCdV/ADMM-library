@@ -5,7 +5,7 @@
 % Issue: 0 
 % Validated: 
 
-%% Test exercise I %% 
+%% Test exercise III %% 
 % Solve for the minimum of ||x||_1 s.t. Ax = b % 
 
 close; 
