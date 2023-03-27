@@ -14,7 +14,7 @@ clc
 
 %% Define the rendezvous problem and the STM 
 % Time span
-t = 0:1e-1:pi; 
+t = 0:1e-2:pi; 
 
 % Relative initial conditions 
 x0 = [1; 2]; 
@@ -24,10 +24,10 @@ xf = zeros(2,1);
 
 % CW out-of-plane STM
 STM = [cos(t.') sin(t.') -sin(t.') cos(t.')]; 
-Phi = zeros(2, 2 * length(t));
+Phi = zeros(2, 1 * length(t));
 M = reshape(STM(end,:), [2 2]);
 for i = 1:length(t)
-    Phi(:,1+size(x0,1)*(i-1):size(x0,1)*i) = M * reshape(STM(i,:), [2 2])^(-1);
+    Phi(:,i) = M * reshape(STM(i,:), [2 2])^(-1) * [0; 1];
 end
 
 % Residual or missvector
@@ -35,19 +35,18 @@ b = xf-M*x0;
 
 %% Define the ADMM problem 
 rho = 1;        % AL parameter 
-lambda = 1e5;     % Relative weight of the minimum fuel objective
 
 % pre-factor
-[L, U] = factor(Phi,rho);
-Atb = Phi'*b;
+Atb = pinv(Phi)*b;
+pInvA = (eye(size(Phi,2))-pinv(Phi)*Phi);
 
-p = repmat(2,1,length(t));
+p = repmat(1,1,length(t));
 cum_part = cumsum(p);
 
 % Create the functions to be solved 
-Obj = @(x,z)(objective(Phi, b, lambda, cum_part, x, z));
-X_update = @(x,z,u)(x_update(Phi, Atb, L, U, rho, x, z, u));
-Z_update = @(x,z,u)(z_update(lambda, rho, p,x,z,u));
+Obj = @(x,z)(objective(cum_part, z));
+X_update = @(x,z,u)(x_update(pInvA, Atb, x, z, u));
+Z_update = @(x,z,u)(z_update(rho, p, x, z, u));
 
 % Constraint 
 [m,n] = size(Phi); 
@@ -62,40 +61,41 @@ Problem.alpha = 1;
 %% Optimization
 [x, z, Output] = Problem.solver();
 
+%% Apply the pruner 
+dV = reshape(x(:,end), 1, []);
+
+cost_admm = sum(sqrt(dot(dV,dV,1)));
+[dV, cost] = PVT_pruner(STM, [0;1], dV);
+
 %% Outcome 
 res = b-Phi*x(:,end);
+ratio = 1-cost/cost_admm;
 
 %% Results 
-plot(Output.objval); 
+figure
+plot(1:Output.Iterations, Output.objval); 
 ylabel('Fval')
 xlabel('Iterations')
+grid on;
+
+figure
+plot(t, dV); 
+grid on;
+ylabel('dV')
+xlabel('Time')
+
+figure
+plot(t, sqrt(dot(dV,dV,1))); 
+grid on;
+ylabel('dV')
+xlabel('Time')
 
 %% Auxiliary functions 
-function [L, U] = factor(A, rho)
-    [m, n] = size(A);
-    if ( m >= n )    % if skinny
-       L = chol( A'*A + rho*speye(n), 'lower' );
-    else            % if fat
-       L = chol( speye(m) + 1/rho*(A*A'), 'lower' );
-    end
-
-    % force matlab to recognize the upper / lower triangular structure
-    L = sparse(L);
-    U = sparse(L');
+function [x] = x_update(pInvA, Atb, x, z, u) 
+   x = pInvA*(z-u)+Atb;
 end
 
-function [x] = x_update(A, Atb, L, U, rho, x, z, u)
-    [m,n] = size(A); 
-
-    q = Atb + rho*(z - u);    % temporary value
-    if( m >= n )              % if skinny
-       x = U \ (L \ q);
-    else                      % if fat
-       x = q/rho - (A'*(U \ ( L \ (A*q) )))/rho^2;
-    end
-end
-
-function [z] = z_update(lambda, rho, p, x, z, u)
+function [z] = z_update(rho, p, x, z, u)
     % cumulative partition
     cum_part = cumsum(p);
 
@@ -103,16 +103,16 @@ function [z] = z_update(lambda, rho, p, x, z, u)
     start_ind = 1;
     for i = 1:length(p)
         sel = start_ind:cum_part(i);
-        z(sel) = shrinkage(x(sel) + u(sel), lambda/rho);
+        z(sel) = shrinkage(x(sel) + u(sel), 1/rho);
         start_ind = cum_part(i) + 1;
     end
 end
 
 function z = shrinkage(x, kappa)
-    z = max(0,1 - kappa/norm(x))*x;
+    z = max(0, 1 - kappa/norm(x))*x;
 end
 
-function [p] = objective(A, b, lambda, cum_part, x, z)
+function [p] = objective(cum_part, z)
     obj = 0;
     start_ind = 1;
     for i = 1:length(cum_part)
@@ -120,5 +120,5 @@ function [p] = objective(A, b, lambda, cum_part, x, z)
         obj = obj + norm(z(sel));
         start_ind = cum_part(i) + 1;
     end
-    p = ( 1/2*sum((A*x - b).^2) + lambda*obj );
+    p = ( obj );
 end
