@@ -34,6 +34,8 @@ classdef ADMM_solver
     properties (Access = private)
         m;
         n; 
+        j; 
+        k;
     end
 
     methods
@@ -57,6 +59,12 @@ classdef ADMM_solver
             % Dimensions of the problem
             obj.m = size(obj.A,1);
             obj.n = size(obj.A,2);
+            obj.j = size(obj.B,1);
+            obj.k = size(obj.B,2);
+
+            if (obj.j ~= obj.m)
+                error('No valid matrix dimensions were introduced.');
+            end
         end
 
         % Options
@@ -169,8 +177,11 @@ classdef ADMM_solver
             GoOn = true;
 
             x = zeros(obj.n,obj.MaxIter+1);
-            z = zeros(obj.m,obj.MaxIter+1);
+            z = zeros(obj.k,obj.MaxIter+1);
             u = zeros(obj.m,1);
+
+            x(end,1) = 1; 
+            z(end,1) = 1; 
             
             tic;
             % Solver

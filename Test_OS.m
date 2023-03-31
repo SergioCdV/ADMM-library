@@ -52,8 +52,8 @@ Z_update = @(x,z,u)(z_update(lambda, rho, p,x,z,u));
 % Constraint 
 [m,n] = size(Phi); 
 A = eye(n);
-B = -eye(m);        
-c = zeros(m,1);
+B = -eye(n);        
+c = zeros(n,1);
 
 % Problem
 Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
