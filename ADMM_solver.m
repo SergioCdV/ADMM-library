@@ -114,7 +114,7 @@ classdef ADMM_solver
             GoOn = true;
 
             x = zeros(obj.n,obj.MaxIter+1);
-            z = zeros(obj.m,obj.MaxIter+1);
+            z = zeros(obj.k,obj.MaxIter+1);
             u = zeros(obj.m,1);
             
             tic;
@@ -137,7 +137,7 @@ classdef ADMM_solver
                 Output.s_norm(iter) = norm(obj.rho * obj.A.' * obj.B * (z(:,iter+1) - z(:,iter)));
             
                 Output.eps_pri(iter) =  sqrt(obj.n) * obj.AbsTol + obj.RelTol * max([norm(obj.C) norm(obj.A * x(:,iter+1)), norm(obj.B * z(:,iter+1))]);
-                Output.eps_dual(iter) = sqrt(obj.n) * obj.AbsTol + obj.RelTol * norm(obj.rho * obj.A.' * u);
+                Output.eps_dual(iter) = sqrt(obj.m) * obj.AbsTol + obj.RelTol * norm(obj.rho * obj.A.' * u);
 
                 if (obj.QUIET)
                     if (iter == 1)
@@ -203,7 +203,7 @@ classdef ADMM_solver
                 Output.s_norm(iter) = norm(-obj.rho * (z(:,iter+1) - z(:,iter)));
             
                 Output.eps_pri(iter) =  sqrt(obj.n) * obj.AbsTol + obj.RelTol * max([norm(x(:,iter+1)), norm(z(:,iter+1))]);
-                Output.eps_dual(iter) = sqrt(obj.n) * obj.AbsTol + obj.RelTol * norm(obj.rho * u);
+                Output.eps_dual(iter) = sqrt(obj.m) * obj.AbsTol + obj.RelTol * norm(obj.rho * u);
 
                 if (obj.QUIET)
                     if (iter == 1)
