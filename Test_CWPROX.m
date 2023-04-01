@@ -13,71 +13,85 @@ clear;
 clc
 
 %% Define the rendezvous problem and the STM 
-% Time span
-t = linspace(0,pi,1000);
-n = 1;
+% Parametric study 
+parametric = true; 
 
-% Relative initial conditions 
-x0 = [1; 2; 3; -1; -2*n*1; 2]; 
-
-% Relative final conditions 
-xf = zeros(6,1);
-
-% CW out-of-plane STM
-STM(:,1:6) = [4-3*cos(n*t.') -6*n*t.'+6*sin(n*t.') zeros(length(t),1) 3*n*sin(n*t.') -6*n+6*n*cos(n*t.') zeros(length(t),1)]; 
-STM(:,7:12) = [zeros(length(t),1) ones(length(t),1) zeros(length(t),4)];
-STM(:,13:18) = [zeros(length(t),2) cos(n*t.') zeros(length(t),2) -n*sin(n*t.')];
-STM(:,19:24) = [sin(n*t.')/n -2/n+2*cos(n*t.')/n zeros(length(t),1) cos(n*t.') -2*sin(n*t.') zeros(length(t),1)];
-STM(:,25:30) = [2/n-2*cos(n*t.')/n 4/n*sin(n*t.')-3*t.' zeros(length(t),1) 2*sin(n*t.') -3+4*cos(n*t.') zeros(length(t),1)];
-STM(:,31:36) = [zeros(length(t),2) sin(n*t.')/n zeros(length(t),2) cos(n*t.')];
-
-Phi = zeros(6, 3 * length(t));
-M = reshape(STM(end,:), [6 6]);
-for i = 1:length(t)
-    Phi(:,1+3*(i-1):3*i) = M * reshape(STM(i,:), [6 6])^(-1) * [zeros(3); eye(3)];
+if (parametric)
+    TOF = linspace(0.1,500,100); 
+else
+    TOF = pi;
 end
 
-% Residual or missvector
-b = xf-M*x0;
-
-%% Define the ADMM problem 
-rho = 1;        % AL parameter 
-
-% pre-factor
-Atb = pinv(Phi)*b;
-pInvA = (eye(size(Phi,2))-pinv(Phi)*Phi);
-
-p = repmat(3,1,length(t));
-cum_part = cumsum(p);
-
-% Create the functions to be solved 
-Obj = @(x,z)(objective(cum_part, z));
-X_update = @(x,z,u)(x_update(pInvA, Atb, x, z, u));
-Z_update = @(x,z,u)(z_update(rho, p, x, z, u));
-
-% Constraint 
-[m,n] = size(Phi); 
-A = eye(n);
-B = -eye(n);        
-c = zeros(m,1);
-
-% Problem
-Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
-Problem.alpha = 1;
+ratio = zeros(1,length(TOF));
+cost = zeros(1,length(TOF));
 
 %% Optimization
-[x, z, Output] = Problem.solver();
-
-%% Apply the pruner 
-dV = reshape(x(:,end), 3, []);
-
-cost_admm = sum(sqrt(dot(dV,dV,1)));
-[dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
-
-%% Outcome 
-res(:,1) = b-Phi*x(:,end);
-res(:,2) = b-Phi*reshape(dV, [], 1);
-ratio = 1-cost/cost_admm;
+for j = 1:length(TOF)
+    % Time span
+    t = linspace(0,TOF(j),100);
+    n = 1;
+    
+    % Relative initial conditions 
+    x0 = [1; 2; 3; -1; -2*n*1; 2]; 
+    
+    % Relative final conditions 
+    xf = zeros(6,1);
+    
+    % CW STM
+    STM(:,1:6) = [4-3*cos(n*t.') -6*n*t.'+6*sin(n*t.') zeros(length(t),1) 3*n*sin(n*t.') -6*n+6*n*cos(n*t.') zeros(length(t),1)]; 
+    STM(:,7:12) = [zeros(length(t),1) ones(length(t),1) zeros(length(t),4)];
+    STM(:,13:18) = [zeros(length(t),2) cos(n*t.') zeros(length(t),2) -n*sin(n*t.')];
+    STM(:,19:24) = [sin(n*t.')/n -2/n+2*cos(n*t.')/n zeros(length(t),1) cos(n*t.') -2*sin(n*t.') zeros(length(t),1)];
+    STM(:,25:30) = [2/n-2*cos(n*t.')/n 4/n*sin(n*t.')-3*t.' zeros(length(t),1) 2*sin(n*t.') -3+4*cos(n*t.') zeros(length(t),1)];
+    STM(:,31:36) = [zeros(length(t),2) sin(n*t.')/n zeros(length(t),2) cos(n*t.')];
+    
+    Phi = zeros(6, 3 * length(t));
+    M = reshape(STM(end,:), [6 6]);
+    for i = 1:length(t)
+        Phi(:,1+3*(i-1):3*i) = M * reshape(STM(i,:), [6 6])^(-1) * [zeros(3); eye(3)];
+    end
+    
+    % Residual or missvector
+    b = xf-M*x0;
+    
+    %% Define the ADMM problem 
+    rho = 1;        % AL parameter 
+    
+    % pre-factor
+    Atb = pinv(Phi)*b;
+    pInvA = (eye(size(Phi,2))-pinv(Phi)*Phi);
+    
+    p = repmat(3,1,length(t));
+    cum_part = cumsum(p);
+    
+    % Create the functions to be solved 
+    Obj = @(x,z)(objective(cum_part, z));
+    X_update = @(x,z,u)(x_update(pInvA, Atb, x, z, u));
+    Z_update = @(x,z,u)(z_update(rho, p, x, z, u));
+    
+    % Constraint 
+    [m,n] = size(Phi); 
+    A = eye(n);
+    B = -eye(n);        
+    c = zeros(m,1);
+    
+    % Problem
+    Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
+    Problem.alpha = 1;
+    
+    %% Optimization
+    [x, z, Output] = Problem.solver();
+    dV = reshape(x(:,end), 3, []);
+    cost_admm = sum(sqrt(dot(dV,dV,1)));
+    
+    %% Pruning
+    [dV, cost(j)] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
+    
+    %% Outcome 
+    res(:,1) = b-Phi*x(:,end);
+    res(:,2) = b-Phi*reshape(dV, [], 1);
+    ratio(j) = 1-cost(j)/cost_admm;
+end
 
 %% Results 
 figure
@@ -97,6 +111,14 @@ stem(t, sqrt(dot(dV,dV,1)), 'filled');
 grid on;
 ylabel('dV')
 xlabel('Time')
+
+if (parametric)
+    figure
+    plot(TOF, cost);
+    grid on;
+    ylabel('cost')
+    xlabel('TOF')
+end
 
 %% Auxiliary functions 
 function [x] = x_update(pInvA, Atb, x, z, u) 

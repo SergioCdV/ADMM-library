@@ -72,12 +72,12 @@ Problem.alpha = 1;
 dV = reshape(x(:,end), 3, []);
 
 cost_admm = sum(sqrt(dot(dV,dV,1)));
-% [dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
+[dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
 
 %% Outcome 
 res(:,1) = b-Phi*x(:,end);
 res(:,2) = b-Phi*reshape(dV, [], 1);
-% ratio = 1-cost/cost_admm;
+ratio = 1-cost/cost_admm;
 
 %% Results 
 figure
