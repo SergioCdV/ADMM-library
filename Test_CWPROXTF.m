@@ -14,7 +14,7 @@ clc
 
 %% Define the rendezvous problem %%
 % Time span
-t = linspace(0,1,20);        % Nondimensional
+t = linspace(0,1,200);        % Nondimensional
 n = 1;                         % Target mean motion
 
 % Final time restrictions
@@ -22,7 +22,7 @@ LB = pi;                        % Minimum TOF
 UB = 100;                       % Maximum TOF
 
 % Maximum DV 
-dVmax = 3;                     % Maximum L2 norm of each impulse
+dVmax = 0.5;                     % Maximum L2 norm of each impulse
 
 % Relative initial conditions 
 x0 = [1; 2; 3; -1; -2*n*1; 2]; 
@@ -36,18 +36,18 @@ cum_part = cumsum(p);
 
 %% Upper level solver 
 % AL parameter 
-rho = 1/dVmax;        % AL parameter 
+rho = 1;        % AL parameter 
 
 % Update functions 
 Obj = @(x,z)(objective(cum_part, z));
 X_update = @(x,z,u)(x_update(t, n, x0, xf, x, z, u));
-Z_update = @(x,z,u)(z_update(rho, LB, UB, p, x, z, u));
+Z_update = @(x,z,u)(z_update(rho, dVmax, LB, UB, p, x, z, u));
 
 % Dual-primal constraint 
-n = 3*length(t)+1; 
-A = eye(n);
-B = -eye(n);        
-c = zeros(n,1);
+d = 3*length(t)+1; 
+A = eye(d);
+B = -eye(d);        
+c = zeros(d,1);
 
 % Problem
 UpperProblem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
@@ -83,9 +83,9 @@ b = xf-M*x0;
 res(:,1) = b-Phi*x(1:end-1,end);
 
 %% Pruning
-[dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
-res(:,2) = b-Phi*reshape(dV, [], 1);
-ratio = 1-cost/cost_admm;
+% [dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
+% res(:,2) = b-Phi*reshape(dV, [], 1);
+% ratio = 1-cost/cost_admm;
 
 %% Results
 figure
@@ -135,7 +135,7 @@ function [x] = x_update(t, n, x0, xf, x, z, u)
     x(end) = z(end)-u(end);
 end
 
-function [z] = z_update(rho, LB, UB, p, x, z, u)
+function [z] = z_update(rho, dVmax, LB, UB, p, x, z, u)
     % cumulative partition
     cum_part = cumsum(p);
 
@@ -144,6 +144,11 @@ function [z] = z_update(rho, LB, UB, p, x, z, u)
     for i = 1:length(p)
         sel = start_ind:cum_part(i);
         z(sel) = shrinkage(x(sel) + u(sel), 1/rho);
+
+        if (norm(z(sel)) > dVmax)
+            z(sel) = dVmax * z(sel)/norm(z(sel));
+        end
+
         start_ind = cum_part(i) + 1;
     end
 
