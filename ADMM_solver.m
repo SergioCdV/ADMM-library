@@ -160,14 +160,15 @@ classdef ADMM_solver
             % Final results 
             Output.Time = toc;
             Output.Result = ~GoOn; 
-            Output.Iterations = iter;
             
             if (GoOn)
                 x = x(:,1:iter-1); 
                 z = z(:,1:iter-1);
+                Output.Iterations = iter-1;
             else
                 x = x(:,1:iter); 
                 z = z(:,1:iter);
+                Output.Iterations = iter;
             end
         end
 
@@ -179,9 +180,6 @@ classdef ADMM_solver
             x = zeros(obj.n,obj.MaxIter+1);
             z = zeros(obj.k,obj.MaxIter+1);
             u = zeros(obj.m,1);
-
-            x(end,1) = 1; 
-            z(end,1) = 1; 
             
             tic;
             % Solver
@@ -226,14 +224,15 @@ classdef ADMM_solver
             % Final results 
             Output.Time = toc;
             Output.Result = ~GoOn; 
-            Output.Iterations = iter;
             
             if (GoOn)
                 x = x(:,1:iter-1); 
                 z = z(:,1:iter-1);
+                Output.Iterations = iter-1;
             else
                 x = x(:,1:iter); 
                 z = z(:,1:iter);
+                Output.Iterations = iter;
             end
         end
     end
