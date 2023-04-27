@@ -10,6 +10,7 @@
 % Inputs: - matrix Phi, the STM matrix of the system in time
 %         - matrix B, the control matrix of the system (possibly in time)
 %         - array dV, the impulsive, non-pruned, control law
+%         - string norm, the norm to be used
 
 % Output: - array dV, the pruned impulses sequence 
 %         - scalar cost, the associated L2 cost of the sequence
@@ -17,14 +18,13 @@
 % New versions: 
 
 %% Functions
-function [dV, cost] = PVT_pruner(Phi, B, dV)
+function [dV, cost] = PVT_pruner(Phi, B, dV, norm)
     % Constants 
     m = size(B,1);                              % Dimension of the state space
     num_sequence = size(dV,2)-(size(B,1)+1);    % Number of sequence reductions
 
     % Initial setup
     if (num_sequence >= 0)
-        cost = sqrt(dot(dV,dV,1));          % Current cost 
         sequence = dV;                      % Initial sequence
 
         % Get the sequence 
@@ -39,34 +39,36 @@ function [dV, cost] = PVT_pruner(Phi, B, dV)
 
             if (length(pos) > 1)
                 for i = 1:length(pos)-1
-                    [seq(:,pos(i):pos(i+1)-1), cost] = sequence_reduction(phi(pos(i):pos(i+1)-1,:), B, seq(:,pos(i):pos(i+1)-1));
+                    [seq(:,pos(i):pos(i+1)-1), cost] = sequence_reduction(phi(pos(i):pos(i+1)-1,:), B, seq(:,pos(i):pos(i+1)-1), norm);
                 end
             else
-                [seq, cost] = sequence_reduction(phi, B, seq);
+                [seq, cost] = sequence_reduction(phi, B, seq, norm);
             end
 
             % Final sequence
             sequence(:,index) = seq;
 
             % Get the sequence 
-            V = sqrt(dot(sequence, sequence, 1));
+            V = sqrt(dot(sequence, sequence,1));
             index = V ~= 0;
         end
     
         % Final sequence 
         dV = sequence; 
     else
-        cost = sqrt(dot(dV,dV,1)); 
+        switch (norm)
+            case 'L2'
+                cost = sum(sqrt(dot(dV,dV,1)));
+            case 'L1'
+                cost = sum(sum(abs(dV),1));
+        end
     end
 end
 
 %% Auxiliary functions 
-function [dV, cost] = sequence_reduction(Phi, B, dV)
+function [dV, cost] = sequence_reduction(Phi, B, dV, norm)
     % Constants 
     m = size(B,1);                              % Dimension of the state space
-
-    % Weights of the sequence 
-    V = sqrt(dot(dV,dV,1));
 
     % Final matrix
     M = reshape(Phi(end,:), [m m]);
@@ -77,14 +79,18 @@ function [dV, cost] = sequence_reduction(Phi, B, dV)
         u(:,i) = R*dV(:,i);
     end
 
+    V = sqrt(dot(dV,dV,1));
     u(:, V ~= 0) = u(:, V ~= 0)./V(V ~= 0);
-
     index = V == 0;
     dumb = u(:,~index);
 
     if (sum(~index) >= 2)
-        b = -dumb(:,end);
-        dumb = [(dumb(:,1:end-1)\b).' 1];
+        v = [(-dumb(:,1:end-1)\dumb(:,end)).' 1];
+        diff = V - sqrt(3)/3 * sum(abs(dV),1);
+        res = sum(v - max(v) * diff);
+        alpha_g = -sign(res);
+
+        dumb = v * alpha_g;
     
         alpha = zeros(1,size(u,2));
         alpha(~index) = dumb;
@@ -94,17 +100,19 @@ function [dV, cost] = sequence_reduction(Phi, B, dV)
             alpha = -alpha;
         end
     
+        % New impulse sequence 
         beta = alpha(V ~= 0)./V(V ~= 0);
         beta_r = max(beta);
-        mu = V(V ~= 0)./beta_r.*(beta_r-beta);
-    
-        % New impulse sequence 
-        dV(:,V ~= 0) = (mu./V(V ~= 0)).*dV(:,V ~= 0); 
-    
-        % New sequence cost 
-        cost = sum(sqrt(dot(dV,dV,1)));
-    else
-        cost = sum(V); 
+        mu = 1./beta_r.*(beta_r-beta);
+        dV(:,V ~= 0) = mu.*dV(:,V ~= 0); 
+    end
+
+    % Final cost
+    switch (norm)
+        case 'L2'
+            cost = sum(sqrt(dot(dV,dV,1)));
+        case 'L1'
+            cost = sum(sum(abs(dV),1));
     end
 end
 

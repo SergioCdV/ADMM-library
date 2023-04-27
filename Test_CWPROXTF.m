@@ -14,15 +14,15 @@ clc
 
 %% Define the rendezvous problem %%
 % Time span
-t = linspace(0,1,200);        % Nondimensional
+t = linspace(0,1,2000);        % Nondimensional
 n = 1;                         % Target mean motion
 
 % Final time restrictions
 LB = pi;                        % Minimum TOF
-UB = 100;                       % Maximum TOF
+UB = pi;                       % Maximum TOF
 
 % Maximum DV 
-dVmax = 0.5;                     % Maximum L2 norm of each impulse
+dVmax = 0.05;                    % Maximum L2 norm of each impulse
 
 % Relative initial conditions 
 x0 = [1; 2; 3; -1; -2*n*1; 2]; 
@@ -36,7 +36,7 @@ cum_part = cumsum(p);
 
 %% Upper level solver 
 % AL parameter 
-rho = 1;        % AL parameter 
+rho = 100;        % AL parameter 
 
 % Update functions 
 Obj = @(x,z)(objective(cum_part, z));
@@ -80,31 +80,40 @@ end
     
 % Residual or missvector
 b = xf-M*x0;
-res(:,1) = b-Phi*x(1:end-1,end);
+res(:,1) = b-Phi*z(1:end-1,end);
 
 %% Pruning
-% [dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
-% res(:,2) = b-Phi*reshape(dV, [], 1);
-% ratio = 1-cost/cost_admm;
+[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
+res(:,2) = b-Phi*reshape(dV2, [], 1);
+ratio = 1-cost/cost_admm;
 
 %% Results
 figure
+hold on
 plot(1:Output.Iterations, Output.objval); 
-ylabel('Fval')
-xlabel('Iterations')
+yline(cost, '--')
+legend('ADMM cost', 'PVT cost')
 grid on;
+ylabel('$\Delta V_T$')
+xlabel('Iteration $i$')
 
 figure
-plot(t, dV); 
-grid on;
-ylabel('dV')
-xlabel('Time')
-
-figure
+hold on
+yline(dVmax, '--');
 stem(t, sqrt(dot(dV,dV,1)), 'filled'); 
 grid on;
-ylabel('dV')
-xlabel('Time')
+legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
+ylabel('$\Delta V$')
+xlabel('$t$')
+
+figure
+hold on
+yline(dVmax, '--');
+stem(t, sqrt(dot(dV2,dV2,1)), 'filled'); 
+grid on;
+legend('$\Delta V_{max}$', '$\Delta V_{PVT}$')
+ylabel('$\Delta V$')
+xlabel('$t$')
 
 %% Lower problem update functions
 function [x] = x_update(t, n, x0, xf, x, z, u) 

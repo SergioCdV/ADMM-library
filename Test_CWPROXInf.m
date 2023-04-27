@@ -14,7 +14,7 @@ clc
 
 %% Define the rendezvous problem and the STM 
 % Time span
-t = linspace(0,2*pi,200); 
+t = linspace(0,2*pi,100); 
 n = 1;
 
 % Relative initial conditions 
@@ -40,6 +40,9 @@ end
 % Residual or missvector
 b = xf-M*x0;
 
+% Maximum Linft norm
+dVmax = 0.1; 
+
 %% Define the ADMM problem 
 rho = 10;        % AL parameter 
 
@@ -53,7 +56,7 @@ cum_part = cumsum(p);
 % Create the functions to be solved 
 Obj = @(x,z)(objective(cum_part, z));
 X_update = @(x,z,u)(x_update(pInvA, Atb, x, z, u));
-Z_update = @(x,z,u)(z_update(rho, p, x, z, u));
+Z_update = @(x,z,u)(z_update(dVmax, cum_part, rho, x, z, u));
 
 % Constraint 
 [m,n] = size(Phi); 
@@ -72,62 +75,103 @@ Problem.alpha = 1;
 dV = reshape(x(:,end), 3, []);
 
 cost_admm = sum(sqrt(dot(dV,dV,1)));
-% [dV, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
+[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
 
 %% Outcome 
 res(:,1) = b-Phi*x(:,end);
-res(:,2) = b-Phi*reshape(dV, [], 1);
-% ratio = 1-cost/cost_admm;
+res(:,2) = b-Phi*reshape(dV2, [], 1);
+ratio = 1-cost/cost_admm;
+
+Norm = zeros(2,length(p));
+for i = 1:length(cum_part)
+    Norm(1,i) = norm(dV(:,i),'inf');
+    Norm(2,i) = norm(dV2(:,i),'inf');
+end
 
 %% Results 
 figure
+hold on
 plot(1:Output.Iterations, Output.objval); 
-ylabel('Fval')
-xlabel('Iterations')
+yline(cost, '--')
+legend('ADMM cost', 'PVT cost')
 grid on;
+ylabel('$\Delta V_T$')
+xlabel('Iteration $i$')
 
 figure
-plot(t, dV); 
+hold on
+yline(dVmax, '--');
+stem(t, Norm(1,:), 'filled'); 
 grid on;
-ylabel('dV')
-xlabel('Time')
+legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
+ylabel('$\Delta V$')
+xlabel('$t$')
 
 figure
-stem(t, sqrt(dot(dV,dV,1)), 'filled'); 
+hold on
+yline(dVmax, '--');
+stem(t, Norm(2,:), 'filled'); 
 grid on;
-ylabel('dV')
-xlabel('Time')
+legend('$\Delta V_{max}$', '$\Delta V_{PVT}$')
+ylabel('$\Delta V$')
+xlabel('$t$')
 
 %% Auxiliary functions 
 function [x] = x_update(pInvA, Atb, x, z, u) 
+   % Impulses update
    x = pInvA*(z-u)+Atb;
 end
 
-function [z] = z_update(rho, p, x, z, u)
-    % cumulative partition
-    cum_part = cumsum(p);
-
-    % z-update
+function [z] = z_update(dVmax, p, rho, x, z, u)
+    % Impulses update
     start_ind = 1;
     for i = 1:length(p)
-        sel = start_ind:cum_part(i);
-        for j = 1:length(sel)
-            z(sel(j)) = shrinkage(x(sel(j)) + u(sel(j)), 1/rho);
-        end
-        start_ind = cum_part(i) + 1;
+        sel = start_ind:p(i);
+        z(sel) = shrinkage(x(sel) + u(sel), 1/rho);     % Minimization of the norm
+        z(sel) = ball_projection(z(sel),dVmax);         % Ball projection
+        start_ind = p(i) + 1;
     end
 end
 
+% Linfty minimization
 function z = shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
+    z = x-kappa*l1_projection(x/kappa,1);
 end
 
+% Ball projection 
+function [z] = ball_projection(z,a)
+    k = max(abs(z));
+    if (k > a)
+        z(k == abs(z)) = a * sign(z(k == abs(z)));
+    elseif (k < -a)
+        z(k == z) = -a * sign(z(k == abs(z)));
+    end
+end
+
+% Projection onto the L1 ball 
+function [x] = l1_projection(x, a)
+    if (sum(abs(x)) > a)
+        u = sort(x,'descend');
+        K = 1:length(x); 
+
+        index = false * ones(1,length(K));
+        for i = 1:length(K)
+            index(i) = sum(u(1:K(i)))/K(i) < u(K(i));
+        end
+        index(1) = 1;
+        u = u(logical(index));
+        rho = sum(u-a)/length(u);
+        x = max(x-rho,0);
+    end
+end
+
+% Objective function
 function [p] = objective(cum_part, z)
     obj = 0;
     start_ind = 1;
     for i = 1:length(cum_part)
         sel = start_ind:cum_part(i);
-        obj = obj + norm(z(sel));
+        obj = obj + norm(z(sel),'inf');
         start_ind = cum_part(i) + 1;
     end
     p = ( obj );
