@@ -14,7 +14,7 @@ clc
 
 %% Define the rendezvous problem and the STM 
 % Time span
-t = linspace(0,pi,800); 
+t = linspace(0,pi,1000); 
 n = 1;
 
 % Relative initial conditions 
@@ -41,7 +41,10 @@ end
 b = xf-M*x0;
 
 % Maximum L1 norm
-dVmax = 100; 
+dVmax = 0.2; 
+
+% Cardinality sequence 
+K = 50;
 
 %% Define the ADMM problem 
 rho = 1;        % AL parameter 
@@ -56,7 +59,7 @@ cum_part = cumsum(p);
 % Create the functions to be solved 
 Obj = @(x,z)(objective(cum_part, z));
 X_update = @(x,z,u)(x_update(pInvA, Atb, x, z, u));
-Z_update = @(x,z,u)(z_update(dVmax, cum_part, rho, x, z, u));
+Z_update = @(x,z,u)(z_update(dVmax, cum_part, K, rho, x, z, u));
 
 % Constraint 
 [m,n] = size(Phi); 
@@ -71,16 +74,10 @@ Problem.alpha = 1;
 %% Optimization
 [x, z, Output] = Problem.solver();
 
-%% Apply the pruner 
-dV = reshape(x(:,end), 3, []);
-
-cost_admm = sum(sum(abs(dV),1));
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L1');
-
 %% Outcome 
+dV = reshape(x(:,end), 3, []);
+cost = sum(sum(abs(dV),1));
 res(:,1) = b-Phi*x(:,end);
-res(:,2) = b-Phi*reshape(dV2, [], 1);
-ratio = 1-cost/cost_admm;
 
 %% Results 
 figure
@@ -101,29 +98,28 @@ legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
 
-figure
-hold on
-yline(dVmax, '--');
-stem(t, sum(abs(dV2),1), 'filled'); 
-grid on;
-legend('$\Delta V_{max}$', '$\Delta V_{PVT}$')
-ylabel('$\Delta V$')
-xlabel('$t$')
-
 %% Auxiliary functions 
 function [x] = x_update(pInvA, Atb, x, z, u) 
    % Impulses update
    x = pInvA*(z-u)+Atb;
 end
 
-function [z] = z_update(dVmax, p, rho, x, z, u)
+function [z] = z_update(dVmax, p, K, rho, x, z, u)
     % Impulses update
     start_ind = 1;
     for i = 1:length(p)
         sel = start_ind:p(i);
-        z(sel) = shrinkage(x(sel) + u(sel), 1/rho);       % Minimization
+        z(sel) = shrinkage(x(sel) + u(sel), 1/rho);     % Minimization
         z(sel) = ball_projection(z(sel), dVmax);        % Ball projection   
         start_ind = p(i) + 1;
+    end
+
+    dV = reshape(z,3,[]);
+    [~, pos] = sort(sum(abs(dV),1), 'descend');
+    
+    index = pos(K+1:end);
+    for i = 1:length(index)
+        z(1 + 3 * (index(i)-1): 3 * index(i)) = zeros(3,1);
     end
 end
 

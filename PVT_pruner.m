@@ -85,12 +85,12 @@ function [dV, cost] = sequence_reduction(Phi, B, dV, norm)
     dumb = u(:,~index);
 
     if (sum(~index) >= 2)
-        v = [(-dumb(:,1:end-1)\dumb(:,end)).' 1];
+        v = (-dumb(:,1:end-1)\dumb(:,end)).';
         diff = V - sqrt(3)/3 * sum(abs(dV),1);
-        res = sum(v - max(v) * diff);
+        res = sum(v) + (1 - max([v 1]./V(V ~= 0)) * sum(diff));
         alpha_g = -sign(res);
 
-        dumb = v * alpha_g;
+        dumb = [v 1] * alpha_g;
     
         alpha = zeros(1,size(u,2));
         alpha(~index) = dumb;
@@ -103,6 +103,13 @@ function [dV, cost] = sequence_reduction(Phi, B, dV, norm)
         % New impulse sequence 
         beta = alpha(V ~= 0)./V(V ~= 0);
         beta_r = max(beta);
+
+        check = sum(sum(abs(dV),1)) <= sqrt(3) * (sum(V)-Alpha/beta_r);
+
+        if (~check)
+            a = 1;
+        end
+
         mu = 1./beta_r.*(beta_r-beta);
         dV(:,V ~= 0) = mu.*dV(:,V ~= 0); 
     end
