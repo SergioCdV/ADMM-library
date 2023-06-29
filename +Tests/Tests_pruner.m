@@ -25,7 +25,7 @@ Phi = repmat([1 1 0 1], length(t), 1);
 Phi(:,2) = t.';
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV);
+[dV, cost] = PVT_pruner(Phi, B, dV, 'L2');
 
 %% Test case II %%
 % Time span
@@ -43,4 +43,4 @@ B = [0; 1];
 Phi = [cos(t).' sin(t.') -sin(t.') cos(t.')];
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV);
+[dV, cost] = PVT_pruner(Phi, B, dV, 'L2');
