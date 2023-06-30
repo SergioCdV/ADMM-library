@@ -27,10 +27,10 @@ n = 1;               % Mean motion
 Tc = n;              % Characteristic time
 
 % Maximum L1 norm
-dVmax = 20; 
+dVmax = 0.003; 
 
 % Cardinality sequence 
-K = 1e3;
+K = 20;
 
 %% Define the rendezvous problem and the STM 
 tf = 2*pi;                      % Time of flight
@@ -62,7 +62,7 @@ end
 b = xf-M*x0;
 
 %% Optimization
-rho = 5e2;        % AL parameter 
+rho = 1e3;        % AL parameter 
 
 % pre-factor
 Atb = pinv(Phi)*b;
@@ -141,8 +141,8 @@ grid on;
 legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure 
 plot3(s(:,1), s(:,2), s(:,3)); 

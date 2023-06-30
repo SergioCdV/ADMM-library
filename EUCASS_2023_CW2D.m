@@ -32,7 +32,7 @@ dVmax = 1;         % Maximum magnitude impulse
 tf = 2*pi;                      % Time of flight
     
 % Time span
-t = linspace(0, tf, 100);
+t = linspace(0, tf, 50);
 
 % Relative initial conditions
 x0 = [-0.005019; 0.01; 0.01; 0.01; 0.01; 0];  
@@ -58,7 +58,7 @@ end
 b = xf-M*x0;
 
 %% Optimization
-rho = 1e2;        % AL parameter 
+rho = 5e1;        % AL parameter 
     
 % Pre-factor
 Atb = pinv(Phi)*b;
@@ -150,8 +150,8 @@ grid on;
 % legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
@@ -161,8 +161,8 @@ grid on;
 % legend('$\Delta V_{max}$', '$\Delta V_{PVT}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure 
 plot3(s(:,1), s(:,2), s(:,3)); 

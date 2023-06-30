@@ -136,8 +136,8 @@ grid on;
 % legend('$\Delta V_{max}$', '$\Delta V_{ADMM}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
@@ -147,8 +147,8 @@ grid on;
 % legend('$\Delta V_{max}$', '$\Delta V_{PVT}$')
 ylabel('$\Delta V$')
 xlabel('$t$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure 
 plot3(s(:,1), s(:,2), s(:,3)); 
