@@ -11,6 +11,9 @@
 % Inputs:  
 % Outputs: - vector x, the update impulsive sequence
 
-function [x] = x_update(c, rho, x, z, u) 
-   x = (z-u) - c/rho;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
+function [x] = x_update(m, Phi, c, rho, x, z, u)
+   % Impulses update (proximal minimization of the flow indicator function: Ax = b)
+   b = [c + rho * (z - u); zeros(length(c)-m,1)];
+   x = Phi * b;
+   x = x(1:length(c));
 end

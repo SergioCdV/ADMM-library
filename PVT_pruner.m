@@ -30,6 +30,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, norm)
         % Get the sequence 
         V = sqrt(dot(sequence, sequence,1));
         index = V ~= 0;
+        cost = 0;
 
         while (sum(index) >= m+1)
             % Reduce the sequence

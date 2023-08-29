@@ -1,15 +1,15 @@
 %% Optimal rendezvous by ADMM %% 
 % Sergio Cuevas del Valle
-% Date: 28/08/23
-% File: NeustadtSolver.m 
+% Date: 29/08/23
+% File: PrimalSolver.m 
 % Issue: 0 
 % Validated: 
 
-%% Neustadt Rendezvous Solver %% 
-% Implementation of a object-oriented solver for primal linear rendezvous problems
+%% Carter Rendezvous Solver %% 
+% Implementation of a object-oriented solver for dual linear rendezvous problems
 % via ADMM
 
-classdef NeustadtSolver < RendezvousProblems.SolverRendezvous
+classdef CarterSolver < RendezvousProblems.SolverRendezvous
     % Basic properties
     properties
         t;                  % Execution clocks
@@ -23,7 +23,7 @@ classdef NeustadtSolver < RendezvousProblems.SolverRendezvous
     % Methods
     methods
         % Constructor
-        function [obj] = NeustadtSolver(myMission, myThruster)
+        function [obj] = CarterSolver(myMission, myThruster)
             obj@RendezvousProblems.SolverRendezvous(myMission, myThruster);
         end
 
@@ -33,9 +33,9 @@ classdef NeustadtSolver < RendezvousProblems.SolverRendezvous
 
     % ADMM functions
     methods (Static)
-        [p] = objective(c, x);
-        [x] = x_update(m, Phi, c, rho, x, z, u);
-        [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u);
+        [p] = objective(p, cum_part, z);
+        [x] = x_update(n, q, pInvA, Atb, x, z, u);
+        [z] = z_update(indices, p, q, umin, umax, K, Phi, b, rho, x, z, u);
     end
 
 end

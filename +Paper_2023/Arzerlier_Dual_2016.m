@@ -27,14 +27,13 @@ n = 1;               % Mean motion
 Tc = n;              % Characteristic time
 
 %% Define the rendezvous problem and the STM 
-tf = pi;                      % Time of flight
+tf = 2*pi;                      % Time of flight
     
 % Time span
-t = linspace(0, tf, 5);
+t = linspace(0, tf, 10);
 
 % Relative initial conditions
 x0 = [-0.005019; 0.01; 0.01; 0.01; 0.01; 0];  
-% x0 = [1; 2; 3; -1; -pi; 2];
 
 % Relative final conditions 
 xf = zeros(6,1);
@@ -56,34 +55,35 @@ end
 B = repmat([zeros(3); eye(3)], 1, length(t));
 
 %% Final mission definition 
-K = 6;                                                % Maximum number of impulses
+K = Inf;                                                % Maximum number of impulses
 myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
+myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
-rho = 1;        % AL parameter 
+rho = 1e2;        % AL parameter 
 
-[~, sol, ~, myProblem] = myProblem.Solve(1e-2, rho);
-
-p = reshape(sol(7:end), 3, []);
-dV = myProblem.u;
+[~, dV, ~, myProblem] = myProblem.Solve(rho);
+p = dV(4:6,:);
+dV = dV(1:3,:);
 
 % Optimization
 cost_admm = myProblem.Cost;
 Output = myProblem.Report;
 
 % Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L1');
+[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
 
 %% Outcome 
 ratio = 1-cost/cost_admm;
+mag_p = sqrt(dot(p,p,1));
+error = abs(1-mag_p);
 
 %% Chaser orbit reconstruction 
 % Preallocation 
@@ -101,14 +101,15 @@ for i = 1:length(t)
 
     % Add maneuver
     if (norm(dV2(:,i)) ~= 0)
-        s(i,4:6) = s(i,4:6) + dV(:,i).';
+        s(i,4:6) = s(i,4:6) + dV2(:,i).';
     end
 end
 
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval); 
+iter = 1:Output.Iterations;
+plot(iter, Output.objval); 
 yline(cost, '--')
 legend('ADMM cost', 'PVT cost')
 grid on;
@@ -148,3 +149,12 @@ grid on;
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
+
+figure
+hold on
+plot(t, mag_p); 
+grid on;
+ylabel('$\|p\|$')
+xlabel('$t$')
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));

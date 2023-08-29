@@ -36,50 +36,16 @@ function [z] = z_update(indices, q, K, Phi, rho, x, z, u)
         start_ind = indices(i) + 1;
     end
 
-    % Cardinality constraint
-    if (K ~= Inf)
-        p = reshape(p, indices(1), []);
-        switch (q)
-            case 'L1'
-                cost = sum( abs(dV), 1);
-            case 'L2'
-                cost = sqrt( dot(dV, dV, 1) );
-            case 'Linfty'
-                cost = max(abs(dV), [], 1);
-        end
-    
-        [~, pos] = sort( cost, 'descend');
-        
-        index = pos(K+1:end);
-        for i = 1:length(index)
-            p(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
-        end
-    end
-
     % Lagrange multiplier update
     pinvPhi = pinv(Phi);
     lambda = (eye(m)-pinvPhi*Phi) * (x(1:m) + u(1:m)) + Phi \ p;
     
     % Final vector
     z = [lambda; p];
+    z(m+1:end) = p;
 end
 
 %% Auxiliary functions
-% Proximal minimization of the L1 norm
-function z = l1_shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
-end
-
-% Proximal minimization of the L2 norm
-function z = l2_shrinkage(x, kappa)
-    z = max(0, 1 - kappa/norm(x)) * x;
-end
-
-% Proximal minimization of the Lifty norm
-function z = lifty_shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
-end
-
 % Projection onto the L1 ball 
 function [x] = l1_bproj(x, a)
     if (sum(abs(x)) > a)
