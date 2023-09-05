@@ -46,7 +46,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     cum_part = cumsum(p);
 
     % Create the functions to be solved 
-    Obj = @(x,z)(obj.objective(obj.Thruster.p, cum_part, z));
+    Obj = @(x,z)(obj.objective(obj.Thruster.p, cum_part, x));
     X_update = @(x,z,u)(obj.x_update(n, obj.Thruster.q, pInvA, Atb, x, z, u));
     Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.p, obj.Thruster.q, obj.Thruster.umin, obj.Thruster.umax, obj.Mission.N, Phi, b, rho, x, z, u));
 

@@ -33,7 +33,7 @@ classdef PrimalSolver < RendezvousProblems.SolverRendezvous
 
     % ADMM functions
     methods (Static)
-        [p] = objective(p, cum_part, z);
+        [p] = objective(p, cum_part, x);
         [x] = x_update(pInvA, Atb, x, z, u);
         [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u);
     end

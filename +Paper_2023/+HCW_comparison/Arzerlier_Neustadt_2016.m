@@ -27,10 +27,10 @@ n = 1;               % Mean motion
 Tc = n;              % Characteristic time
 
 %% Define the rendezvous problem and the STM 
-tf = pi;                      % Time of flight
+tf = 1.5*pi;                      % Time of flight
     
 % Time span
-t = linspace(0, tf, 5);
+t = linspace(0, tf, 5e2);
 
 % Relative initial conditions
 x0 = [-0.005019; 0.01; 0.01; 0.01; 0.01; 0];  
@@ -62,15 +62,15 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-rho = 1;        % AL parameter 
-
-[~, sol, ~, myProblem] = myProblem.Solve(1e-2, rho);
+rho = 1/length(t);                                      % AL parameter 
+eps = [1e-3; 1e-4];                                     % Numerical tolerance
+[~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
 
 p = reshape(sol(7:end), 3, []);
 dV = myProblem.u;

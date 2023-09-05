@@ -33,7 +33,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = (STM(:,1+m*(i-1):m*i)\M) * B(:,1+n*(i-1):n*i);
+        Phi(:,1+n*(i-1):n*i) = (M * STM(:,1+m*(i-1):m*i)^(-1)) * B(:,1+n*(i-1):n*i);
     end
 
     % Compute the initial missvector
@@ -46,7 +46,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     cum_part = cumsum(p);
 
     % Create the functions to be solved 
-    Obj = @(x,z)(obj.objective(obj.Thruster.p, cum_part, z));
+    Obj = @(x,z)(obj.objective(obj.Thruster.p, cum_part, x));
     X_update = @(x,z,u)(obj.x_update(pInvA, Atb, x, z, u));
     Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.p, obj.Thruster.q, obj.Thruster.umin, obj.Thruster.umax, obj.Mission.N, rho, x, z, u));
 

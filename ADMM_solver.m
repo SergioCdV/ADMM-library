@@ -28,9 +28,9 @@ classdef ADMM_solver
 
         % Method hyperparameters
         alpha = 0;                  % Relaxation coefficient
-        MaxIter = 1e3;              % Maximum number of iterations
-        AbsTol = 1e-6;              % Absolute tolerance
-        RelTol = 1e-6;              % Relative tolerance
+        MaxIter = 1e4;              % Maximum number of iterations
+        AbsTol = 1e-5;              % Absolute tolerance
+        RelTol = 1e-5;              % Relative tolerance
 
         QUIET = true;               % Output results flag
     end

@@ -12,7 +12,7 @@
 % Outputs: - vector z, the update impulsive sequence
 
 % Proximal minimization for Z
-function [z] = z_update(indices, q, K, Phi, rho, x, z, u)
+function [z] = z_update(indices, q, K, Phi, b, rho, x, z, u)
     % Constants 
     m = size(Phi,2);
 
@@ -36,10 +36,10 @@ function [z] = z_update(indices, q, K, Phi, rho, x, z, u)
         start_ind = indices(i) + 1;
     end
 
-    % Lagrange multiplier update
-    pinvPhi = pinv(Phi);
-    lambda = (eye(m)-pinvPhi*Phi) * (x(1:m) + u(1:m)) + Phi \ p;
-    
+    % Lagrange multiplier update (projection on a half space)
+    lambda = x(1:m) + u(1:m);
+    lambda = half_space(lambda, b, 0);
+
     % Final vector
     z = [lambda; p];
     z(m+1:end) = p;
@@ -80,4 +80,9 @@ function [x] = lifty_bproj(x, a)
             x(i) = a;
         end
     end
+end
+
+% Projection onto the halfspace 
+function [x] = half_space(x, a, b)
+    x = x - max(dot(a,x)-b, 0)/dot(a,a) * a;
 end

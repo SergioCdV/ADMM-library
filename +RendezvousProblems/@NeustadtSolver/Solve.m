@@ -31,14 +31,16 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     n = obj.Mission.n;                      % Control input dimension
 
     Phi = zeros(size(B,2), size(STM,1));
+    Phi0 = STM(:,1:m);
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(1+n*(i-1):n*i,:) = (STM(:,1+m*(i-1):m*i)^(-1)*B(:,1+n*(i-1):n*i)).';
+        Phi(1+n*(i-1):n*i,:) = (STM(:,1+m*(i-1):m*i)\B(:,1+n*(i-1):n*i)).';
+        PhiPrimer(1:4,1+n*(i-1):n*i,:) = pinv( Phi(1+n*(i-1):n*i,:) );
     end
 
     % Compute the initial missvector
-    b = (M\xf) - x0;
+    b = (M\xf) - (Phi0\x0);
 
     % Save the initial STM
     M = Phi;
@@ -48,8 +50,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     iter = 1;
     GoOn = true;
 
-    while (iter < maxIter && GoOn && N >= 1)
-        v = [b; zeros(n * N,1)];
+    while (iter < maxIter && GoOn && N > 1)
+        v = [-b; -zeros(n * N,1)];
     
         % Pre-factoring of constants
         p = repmat(n, 1, N);
@@ -60,8 +62,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     
         % Create the functions to be solved 
         Obj = @(x,z)(obj.objective(v, z));
-        X_update = @(x,z,u)(obj.x_update(m, Theta, v, rho, x, z, u));
-        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.q, obj.Mission.N, Phi, rho, x, z, u));
+        X_update = @(x,z,u)(obj.x_update(m, Theta, v, PhiPrimer, rho, x, z, u));
+        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.q, obj.Mission.N, Phi, -b, rho, x, z, u));
     
         % ADMM consensus constraint definition 
         A = eye(m + n * N);
@@ -78,7 +80,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
 
         % Solve the problem
         tic
-        [x, ~, Output] = Problem.solver();
+        [x, z, Output] = Problem.solver();
         obj.SolveTime = toc;
 
         % Output
@@ -97,12 +99,11 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
 
         % Check for convergence
         max_p = sort(p_norm);
-        max_p = max_p(end)-1;
-        if (max_p > epsilon)
+        if (max_p(end) > 1 + epsilon(1))
             GoOn = false;
         else
             iter = iter+1;
-            index = abs(p_norm-1) <= epsilon;
+            index = p_norm > 1 - epsilon(2);
             N = sum(index);
             index = kron(index, ones(1,n));
             Phi = Phi(logical(index),:);
@@ -124,13 +125,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             p_norm = max( abs(p), [], 1 );
     end
 
-    index = abs(p_norm-1) < epsilon;
+    index = abs(p_norm-1) < epsilon(1);
 
     if (sum(index) > m)
-        dp = abs(p_norm-1) < epsilon;
-        [~, pos] = sort(dp, 'descend');
+        dp = abs(p_norm-1);
+        [~, pos] = sort(dp);
         index = zeros(1,length(p_norm));
-        index(pos(1:m)) = ones(1,m);
+        index(pos(end-m+1:end)) = ones(1,m);
         index = logical(index);
     end
 

@@ -34,8 +34,8 @@ classdef NeustadtSolver < RendezvousProblems.SolverRendezvous
     % ADMM functions
     methods (Static)
         [p] = objective(c, x);
-        [x] = x_update(m, Phi, c, rho, x, z, u);
-        [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u);
+        [x] = x_update(m, Phi, c, Phi2, rho, x, z, u);
+        [z] = z_update(indices, q, K, Phi, b, rho, x, z, u);
     end
 
 end
