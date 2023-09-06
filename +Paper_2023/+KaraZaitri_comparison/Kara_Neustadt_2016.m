@@ -18,7 +18,7 @@ set_graphics();
 mu = 3.986e14;       % Gauss constant for the Earth
 
 % Target orbital elements
-Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
+Orbit_t = [7011e3 0.004 deg2rad(190) deg2rad(98) 0 0];
 
 nu_0 = 0;            % Initial true anomaly
 nu_f = 24*pi;        % Final true anomaly 
@@ -40,7 +40,6 @@ Tc = 1/n;               % Characteristic time
 Vc = Lc/Tc;             % Characteristic velocity
 
 mu = mu / (Lc^3/Tc^2);  % Gravitational 
-n = n * Tc;             % Mean motion
 
 % x0 = x0 ./ [Lc Lc Vc Vc];
 % xf = xf ./ [Lc Lc Vc Vc];
@@ -156,8 +155,8 @@ end
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval); 
-yline(cost_arz, '--')
+plot(1:Output.Iterations, Output.objval * n); 
+yline(cost_arz * n, '--')
 grid on;
 ylabel('$-c^{T} \lambda$')
 xlabel('Iteration $i$')
@@ -176,7 +175,7 @@ xlabel('$\nu$')
 
 figure
 hold on
-stem(nu, dV_norm, 'filled'); 
+stem(nu, dV_norm * n, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|$')
 xlabel('$\nu$')

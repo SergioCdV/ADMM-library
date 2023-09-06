@@ -40,7 +40,6 @@ Tc = 1/n;               % Characteristic time
 Vc = Lc/Tc;             % Characteristic velocity 
 
 mu = mu / (Lc^3/Tc^2);  % Gravitational 
-n = n * Tc;             % Mean motion
 
 % x0 = x0 ./ [Lc Lc Vc Vc];
 % xf = xf ./ [Lc Lc Vc Vc];
@@ -101,7 +100,7 @@ p = sol(3:4,:);
 dV = sol(1:2,:);
 
 % Optimization
-cost_admm = myProblem.Cost;
+cost_admm = myProblem.Cost * n;
 Output = myProblem.Report;
 
 %% Outcome 
@@ -166,15 +165,7 @@ xlabel('$\nu$')
 
 figure
 hold on
-stem(nu, p_norm, 'filled'); 
-yline(1, '--')
-grid on;
-ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$\nu$')
-
-figure
-hold on
-stem(nu, dV_norm, 'filled'); 
+stem(nu, dV_norm * n, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|$')
 xlabel('$\nu$')
