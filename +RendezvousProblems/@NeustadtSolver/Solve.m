@@ -39,6 +39,10 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         PhiPrimer(1:4,1+n*(i-1):n*i,:) = pinv( Phi(1+n*(i-1):n*i,:) );
     end
 
+    % Independent grid 
+    t = obj.Mission.t;
+    t_pruned = t;
+
     % Compute the initial missvector
     b = (M\xf) - (Phi0\x0);
 
@@ -56,7 +60,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         % Pre-factoring of constants
         p = repmat(n, 1, N);
         cum_part = cumsum(p);
-        pPhi = [Phi kron(eye(N),-eye(n))];
+        pPhi = [Phi kron(eye(N),eye(n))];
         Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
         Theta = pinv(Theta);
     
@@ -105,6 +109,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             iter = iter+1;
             index = p_norm > 1 - epsilon(2);
             N = sum(index);
+            t_pruned = t_pruned(logical(index));
             index = kron(index, ones(1,n));
             Phi = Phi(logical(index),:);
         end
@@ -113,6 +118,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     % Computation of the control law
     p = M * lambda;
     u = [lambda; p];
+    p = z(m+1:end,end);
     p = reshape(p, n, []);
     N = size(p,2);
 
@@ -125,31 +131,61 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             p_norm = max( abs(p), [], 1 );
     end
 
-    index = abs(p_norm-1) < epsilon(1);
+    imp_opp = abs(p_norm-1) < epsilon(1);
 
-    if (sum(index) > m)
-        dp = abs(p_norm-1);
+    if (sum(imp_opp) > 1e3)
+        dp = p_norm-1;
+        d_dp = gradient(dp); 
+        dd_dp = gradient(d_dp);
+        dp = abs(dp);
         [~, pos] = sort(dp);
         index = zeros(1,length(p_norm));
-        index(pos(end-m+1:end)) = ones(1,m);
+
+        k = 0;
+        for i = 1:length(pos)
+            if (t(pos(i)) == t(1) && sign(d_dp(1)) < 0)
+                index(pos(i)) = 1;
+                k = k+1;
+            elseif (t(pos(i)) == t(end) && sign(d_dp(end)) > 0)
+                index(pos(i)) = 1;
+                k = k+1;
+            elseif (sign(dd_dp(pos(i))) < 0)
+                index(pos(i)) = 1;
+                k = k+1;
+            end
+
+            if (k == m)
+                break;
+            end
+        end
+        
         index = logical(index);
+        t_pruned = t_pruned(index);
+        index = kron(index, ones(1,n));
+    elseif (~isempty(Phi))
+        t_pruned = t_pruned(logical(imp_opp));
+        index = kron(imp_opp, ones(1,n));
     end
 
-    id = kron(index, ones(1,n));
-    A = M(logical(id),:);
-    dV = zeros(n,N);
-    if (~isempty(A))
-        dV(:,index) = reshape((A.'\b), n, []); 
+    dv = zeros(n,N);
+    if (~isempty(Phi))
+        A = Phi(logical(index),:);
+        dv = reshape((A.'\b), n, []); 
     end
 
     % Output
     switch (obj.Thruster.p)
         case 'L2'
-            obj.Cost = sqrt( dot(dV,dV,1) );
+            obj.Cost = sqrt( dot(dv, dv, 1) );
         case 'L1'
-            obj.Cost = sum( abs(dV), 1 );
+            obj.Cost = sum( abs(dv), 1 );
         case 'Linfty'
-            obj.Cost = max( abs(dV), [], 1 );
+            obj.Cost = max( abs(dv), [], 1 );
+    end
+
+    dV = zeros(n, length(t));
+    for i = 1:length(t_pruned)
+        dV(:, t_pruned(i) == t) = dv(:,i);
     end
 
     obj.Cost = sum(obj.Cost);

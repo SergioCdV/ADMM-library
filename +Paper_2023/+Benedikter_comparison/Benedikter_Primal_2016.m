@@ -1,10 +1,10 @@
 %% Optimal Linear Rendezvous via ADMM %% 
 % Sergio Cuevas del Valle
 % Date: 28/08/23
-% File: Kara_2011.m 
+% File: Benedikter_2011.m 
 % Validated: 
 
-%% HCW, Example II, Kara Zaitri 2011 %% 
+%% HCW, Benedikter 2011 %% 
 % Solve for the time-fixed HCW optimal L2/L1 problem using ADMM and PVT
 
 close; 
@@ -21,7 +21,7 @@ mu = 3.986e14;       % Gauss constant for the Earth
 Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
 
 nu_0 = 0;            % Initial true anomaly
-nu_f = 24*pi;        % Final true anomaly 
+nu_f = 10;           % Final true anomaly 
 
 % Mean motion
 n = sqrt(mu/Orbit_t(1)^3);      
@@ -31,8 +31,8 @@ t0 = 0;                 % Initial clock
 tf = 7200;              % Final clock
 
 % Initial relative conditions 
-x0 = [-10e3 0 0 0];     % In-plane rendezvous
-xf = [-100 0 0 0];      % Final conditions
+x0 = [-pi 1/4 1/6 0];   % In-plane rendezvous
+xf = [0 0 0 0];         % Final conditions
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -40,9 +40,7 @@ Tc = 1/n;               % Characteristic time
 Vc = Lc/Tc;             % Characteristic velocity 
 
 mu = mu / (Lc^3/Tc^2);  % Gravitational 
-
-% x0 = x0 ./ [Lc Lc Vc Vc];
-% xf = xf ./ [Lc Lc Vc Vc];
+n = n * Tc;
 
 x0 = x0.'; 
 xf = xf.';
@@ -65,23 +63,26 @@ B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(nu));
 % HCW Phi
 STM = zeros(4, 4 * N);
 
-Phi1 = [0 2*sin(nu(1)) -3*sin(nu(1)) cos(nu(1)); ...
-        0 -2*cos(nu(1)) 3*cos(nu(1)) sin(nu(1)); ...
+i = 1;
+Phi1 = [0 2*sin(nu(i)) -3*sin(nu(i)) cos(nu(i)); ...
+        0 -2*cos(nu(i)) 3*cos(nu(i)) sin(nu(i)); ...
         0 1 -2 0; ...
-        1 3*nu(1) -6*nu(1) 2];
+        1 3*nu(i) -6*nu(i) 2];
 
 for i = 1:length(nu)
     
     Phi2 = [-2*cos(nu(i)) -2*sin(nu(i)) -3*nu(i) 1; ...
              2*sin(nu(i)) -2*cos(nu(i)) -3 0; ...
              sin(nu(i)) -cos(nu(i)) -2 0; ...
-             cos(nu(i)) sin(nu(i)) 0 0];
+             cos(nu(i))  sin(nu(i)) 0 0];
 
     STM(:,1+4*(i-1):4*i) = Phi2 * Phi1;
+
+    pSTM(i,:) = reshape(STM(:,1+4*(i-1):4*i), 1, []);
 end
 
 %% Final mission definition 
-K = 4;                                                % Maximum number of impulses
+K = Inf;                                                % Maximum number of impulses
 myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
@@ -91,17 +92,18 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
+myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
-rho = 1;  % AL parameter 
+rho = 1;    % AL parameter 
 
-[~, sol, ~, myProblem] = myProblem.Solve(rho);
-p = sol(3:4,:);
-dV = sol(1:2,:);
+[~, dV, ~, myProblem] = myProblem.Solve(rho);
 
 % Optimization
 cost_admm = myProblem.Cost * n;
 Output = myProblem.Report;
+
+% Pruning 
+[dV2, cost] = PVT_pruner(pSTM, B(:,1:2), dV, 'L2');
 
 %% Outcome 
 switch (myThruster.p)
@@ -111,15 +113,6 @@ switch (myThruster.p)
         dV_norm = sqrt(dot(dV,dV,1));
     case 'Linfty'
         dV_norm = max(abs(dV));
-end
-
-switch (myThruster.q)
-    case 'L1'
-        p_norm = sum(abs(p),1);
-    case 'L2'
-        p_norm = sqrt(dot(p,p,1));
-    case 'Linfty'
-        p_norm = max(abs(p));
 end
 
 %% Chaser orbit reconstruction 
@@ -142,26 +135,15 @@ for i = 1:length(nu)
     end
 end
 
-% Dimensionalization 
-% s = s .* repmat([Lc Lc Vc Vc], N, 1);
-
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval); 
+plot(1:Output.Iterations, Output.objval * n); 
 grid on;
 ylabel('$\Delta V_T$')
 xlabel('Iteration $i$')
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
-
-figure
-hold on
-stem(nu, p_norm, 'filled'); 
-yline(1, '--')
-grid on;
-ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$\nu$')
 
 figure
 hold on

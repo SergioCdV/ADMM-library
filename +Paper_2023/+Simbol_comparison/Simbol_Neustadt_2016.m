@@ -1,13 +1,12 @@
 %% Optimal Linear Rendezvous via ADMM %% 
 % Sergio Cuevas del Valle
 % Date: 28/08/23
-% File: Arzelier_2016.m 
+% File: Simbol_2011.m 
 % Issue: 0 
 % Validated: 
 
-%% Yamanaka-Andersen rendezvous, Arzelier 2016 %% 
+%% Yamanaka-Andersen rendezvous, Arzelier 2011 %% 
 % Solve for the time-fixed YA optimal L2/L1 problem using ADMM and PVT
-% (Carter's solver)
 
 close; 
 clear; 
@@ -17,24 +16,31 @@ set_graphics();
 
 %% Define the target orbit and mission parameters
 % Parameters
-mu = 3.986e14;       % Gauss constant for the Earth
+mu = 3.9860e14;       % Gauss constant for the Earth
 
 % Target orbital elements
-Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
+Orbit_t = [106246.9753e3 0.798788 pi/2 deg2rad(5.2) deg2rad(180) 0];
 
-nu_0 = 0;            % Initial true anomaly
-nu_f = 8.1832;       % Final true anomaly 
+nu_0 = deg2rad(135);            % Initial true anomaly
 
 % Mean motion
 n = sqrt(mu/Orbit_t(1)^3);      
 
 % Mission time
-t0 = 0;              % Initial clock
-tf = 7200;           % Final clock
+t0 = 7;              % Initial clock
+tf = 50002;          % Final clock
+
+% Final true anomaly
+e = Orbit_t(2);
+cos_E = (e + cos(nu_0)) / (1 + e * cos(nu_0));
+sin_E = (sqrt(1-e^2)*sin(nu_0)) / (1 + e * cos(nu_0));
+E = atan2(sin_E, cos_E);
+M0 = E - Orbit_t(2)*sin(E);
+nu_f = InverseKeplerEquation(n, Orbit_t(2), M0, tf-t0);
 
 % Initial relative conditions 
-x0 = [-30 0.5 8.514e-3 0]*1e3;  % In-plane rendezvous
-xf = [-100 0 0 0];              % Final conditions
+x0 = [18309.5 -23764.7 -0.0542 -0.0418];              % In-plane rendezvous
+xf = [335.12 -371.1 0.00155 0.0014];                  % Final conditionsxl
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -56,13 +62,13 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 75;
+N = 200;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
 nu = linspace(nu_0, nu_f, N);
 
-% Control input matrix 
+% Control input matrix
 B = repmat([zeros(2); eye(2)], 1, length(nu));
 
 % YA Phi
@@ -86,23 +92,24 @@ for i = 1:length(nu)
             K = K+1;
         end
     else
-       Phi0 = YA_Phi(mu, h, Orbit_t(2), DT, nu(1)); 
-       invPhi0 = Phi0([1 3 4 6], [1 3 4 6])^(-1);
+       invPhi0 = YA_invPhi(mu, h, e, 0, nu(1));
+       invPhi0 = invPhi0([1 3 4 6], [1 3 4 6]);
        L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
     end
 
     DT = 2*K*pi + dt;
     phi = YA_Phi(mu, h, Orbit_t(2), DT, nu(i));
-    
-    stm = phi([1 3 4 6], [1 3 4 6]) * invPhi0;
 
+    stm = phi([1 3 4 6], [1 3 4 6]) * invPhi0;
+    
     L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
+    Phi(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * phi([1 3 4 6], [1 3 4 6]);
     STM(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * stm * L(:,1:4);
 end
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
+myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
@@ -111,19 +118,22 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
+myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-rho = 1e1;  % AL parameter 
+rho = 1/N^2;                                     % AL parameter 
+eps = [1e-6; 1e-4];                                     % Numerical tolerance
+[~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
 
-[~, sol, ~, myProblem] = myProblem.Solve(rho);
-p = sol(3:4,:);
-dV = sol(1:2,:);
+lambda = reshape(sol(1:4), 4, []);
+p = reshape(sol(5:end), 2, []);
+dV = myProblem.u;
 
 % Optimization
+c = (reshape(Phi(:,end-3:end), [4 4])\xf) - (reshape(Phi(:,1:4), [4 4])\x0);
 cost_admm = myProblem.Cost * Vc;
 Output = myProblem.Report;
 
-%% Outcome 
+% Norm of the primer vector 
 switch (myThruster.p)
     case 'L1'
         dV_norm = sum(abs(dV),1);
@@ -168,12 +178,12 @@ s = s .* repmat([Lc Lc Vc Vc], N, 1);
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+plot(1:Output.Iterations, Output.objval); 
 grid on;
-ylabel('$\Delta V_T$')
+ylabel('$-c^{T} \lambda$')
 xlabel('Iteration $i$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
@@ -182,6 +192,8 @@ yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
 xlabel('$\nu$')
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
@@ -224,4 +236,36 @@ function [dt] = KeplerEquation(n, e, nu_0, nu_f)
         dM = Mf-M0;
     end
     dt = dM/n;
+end
+
+function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
+    % Initial mean anomaly 
+    M = M0 + n * dt;
+
+    % Newton-method 
+    iter = 1; 
+    maxIter = 100; 
+    GoOn = true; 
+    tol = 1e-15;
+    E = M;
+
+    while (GoOn && iter < maxIter)
+        f = E - e * sin(E) - M; 
+        df = 1 - e * cos(E);
+
+        ds = -f/df;
+        E = E + ds; 
+
+        if (abs(ds) < tol)
+            GoOn = false;
+        else
+            iter = iter+1;
+        end
+    end
+
+    % Final true anomaly 
+    sin_nu = (sqrt(1-e^2) * sin(E)) / (1 - e * cos(E));
+    cos_nu = (-e + cos(E)) / (1 - e * cos(E));
+    nu_f = atan2(sin_nu, cos_nu);
+    nu_f = mod(nu_f,2*pi);
 end

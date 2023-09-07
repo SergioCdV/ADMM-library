@@ -16,7 +16,7 @@ function [STM] = YA_Phi(mu, h, e, dt, f)
     % Assemble the matrix 
     c = k * cos(f); 
     s = k * sin(f);
-    s_p = k ;
+    s_p = cos(f) + e*cos(2*f);
     c_p = -(sin(f)+e*sin(2*f));
 
     STM = [1 0 -c*(1+1/k) s*(1+1/k) 0 3*k^2*I; ...

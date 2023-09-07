@@ -69,7 +69,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     obj.SolveTime = toc;
 
     % Output 
-    dV = reshape(x(:,end), n, []);  % Control sequence
+    dV = reshape(z(:,end), n, []);  % Control sequence
     u = dV; 
 
     switch (obj.Thruster.p)

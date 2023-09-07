@@ -1,13 +1,11 @@
 %% Optimal Linear Rendezvous via ADMM %% 
 % Sergio Cuevas del Valle
-% Date: 28/08/23
-% File: Arzelier_2016.m 
-% Issue: 0 
+% Date: 07/09/23
+% File: Kara_2011.m 
 % Validated: 
 
-%% Yamanaka-Andersen rendezvous, Arzelier 2016 %% 
-% Solve for the time-fixed YA optimal L2/L1 problem using ADMM and PVT
-% (Carter's solver)
+%% HCW, Example I, Kara Zaitri 2011 %% 
+% Solve for the time-fixed HCW optimal L2/L1 problem using ADMM and PVT
 
 close; 
 clear; 
@@ -20,21 +18,21 @@ set_graphics();
 mu = 3.986e14;       % Gauss constant for the Earth
 
 % Target orbital elements
-Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
+Orbit_t = [6763e3 0 0 deg2rad(0) 0 0];
 
 nu_0 = 0;            % Initial true anomaly
-nu_f = 8.1832;       % Final true anomaly 
+nu_f = 2*pi;         % Final true anomaly 
 
 % Mean motion
 n = sqrt(mu/Orbit_t(1)^3);      
 
 % Mission time
-t0 = 0;              % Initial clock
-tf = 7200;           % Final clock
+t0 = 0;                 % Initial clock
+tf = 7200;              % Final clock
 
 % Initial relative conditions 
-x0 = [-30 0.5 8.514e-3 0]*1e3;  % In-plane rendezvous
-xf = [-100 0 0 0];              % Final conditions
+x0 = [1 0 0 0];         % In-plane rendezvous
+xf = [0 0 0 0.427];     % Final conditions
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -42,10 +40,9 @@ Tc = 1/n;               % Characteristic time
 Vc = Lc/Tc;             % Characteristic velocity 
 
 mu = mu / (Lc^3/Tc^2);  % Gravitational 
-n = n * Tc;             % Mean motion
 
-x0 = x0 ./ [Lc Lc Vc Vc];
-xf = xf ./ [Lc Lc Vc Vc];
+% x0 = x0 ./ [Lc Lc Vc Vc];
+% xf = xf ./ [Lc Lc Vc Vc];
 
 x0 = x0.'; 
 xf = xf.';
@@ -56,48 +53,31 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 75;
+N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
 nu = linspace(nu_0, nu_f, N);
 
 % Control input matrix 
-B = repmat([zeros(2); eye(2)], 1, length(nu));
+B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(nu));
 
-% YA Phi
-L = zeros(4, 4 * N);
-Phi = zeros(4, 4 * N);
-DT = 0;
-K = 0;
+% HCW Phi
+STM = zeros(4, 4 * N);
+
+Phi1 = [0 2*sin(nu(1)) -3*sin(nu(1)) cos(nu(1)); ...
+        0 -2*cos(nu(1)) 3*cos(nu(1)) sin(nu(1)); ...
+        0 1 -2 0; ...
+        1 3*nu(1) -6*nu(1) 2];
 
 for i = 1:length(nu)
-    % Constants of motion 
-    omega = mu^2 / h^3;                 % True anomaly angular velocity
-    k = 1 + Orbit_t(2) * cos(nu(i));    % Transformation
-    kp =  - Orbit_t(2) * sin(nu(i));    % Derivative of the transformation
-
-    % Solve Kepler's equation
-    dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
     
-    % Consider multiple revolutions
-    if (i > 2)
-        if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
-            K = K+1;
-        end
-    else
-       Phi0 = YA_Phi(mu, h, Orbit_t(2), DT, nu(1)); 
-       invPhi0 = Phi0([1 3 4 6], [1 3 4 6])^(-1);
-       L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
-    end
+    Phi2 = [-2*cos(nu(i)) -2*sin(nu(i)) -3*nu(i) 1; ...
+             2*sin(nu(i)) -2*cos(nu(i)) -3 0; ...
+             sin(nu(i)) -cos(nu(i)) -2 0; ...
+             cos(nu(i)) sin(nu(i)) 0 0];
 
-    DT = 2*K*pi + dt;
-    phi = YA_Phi(mu, h, Orbit_t(2), DT, nu(i));
-    
-    stm = phi([1 3 4 6], [1 3 4 6]) * invPhi0;
-
-    L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
-    STM(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * stm * L(:,1:4);
+    STM(:,1+4*(i-1):4*i) = Phi2 * Phi1;
 end
 
 %% Final mission definition 
@@ -113,14 +93,14 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
-rho = 1e1;  % AL parameter 
+rho = 1;  % AL parameter 
 
 [~, sol, ~, myProblem] = myProblem.Solve(rho);
 p = sol(3:4,:);
 dV = sol(1:2,:);
 
 % Optimization
-cost_admm = myProblem.Cost * Vc;
+cost_admm = myProblem.Cost * n;
 Output = myProblem.Report;
 
 %% Outcome 
@@ -158,17 +138,17 @@ for i = 1:length(nu)
 
     % Add maneuver
     if (norm(dV(:,i)) ~= 0)
-        s(i,3:4) = s(i,3:4) + dV(:,i).';
+        s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
     end
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Vc Vc], N, 1);
+% s = s .* repmat([Lc Lc Vc Vc], N, 1);
 
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+plot(1:Output.Iterations, Output.objval); 
 grid on;
 ylabel('$\Delta V_T$')
 xlabel('Iteration $i$')
@@ -185,7 +165,7 @@ xlabel('$\nu$')
 
 figure
 hold on
-stem(nu, dV_norm * Vc, 'filled'); 
+stem(nu, dV_norm * n, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|$')
 xlabel('$\nu$')
@@ -193,35 +173,10 @@ xlabel('$\nu$')
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure 
-plot(s(:,1), s(:,2)); 
+plot(s(:,1), s(:,3)); 
 xlabel('$x$')
 ylabel('$z$')
 grid on;
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
-
-%% Auxiliary function 
-function [dt] = KeplerEquation(n, e, nu_0, nu_f)
-    % Initial mean anomaly 
-    cos_E = (e + cos(nu_0)) / (1 + e * cos(nu_0));
-    sin_E = (sqrt(1-e^2)*sin(nu_0)) / (1 + e * cos(nu_0));
-    E = atan2(sin_E, cos_E);
-    M0 = E-e*sin(E);
-    M0 = mod(M0,2*pi);
-
-    % Final mean anomaly 
-    cos_E = (e + cos(nu_f)) / (1 + e * cos(nu_f));
-    sin_E = (sqrt(1-e^2)*sin(nu_f)) / (1 + e * cos(nu_f));
-    E = atan2(sin_E, cos_E);
-    Mf = E-e*sin(E);
-    Mf = mod(Mf,2*pi);
-
-    % Time step 
-    dM = Mf-M0;
-    if (dM < 0)
-        Mf = Mf + 2 * pi;
-        dM = Mf-M0;
-    end
-    dt = dM/n;
-end
