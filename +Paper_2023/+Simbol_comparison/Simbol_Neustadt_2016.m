@@ -5,8 +5,8 @@
 % Issue: 0 
 % Validated: 
 
-%% Yamanaka-Andersen rendezvous, Arzelier 2011 %% 
-% Solve for the time-fixed YA optimal L2/L1 problem using ADMM and PVT
+%% CR3BP, Lagrange point rendezvous, Arzelier 2016 %% 
+% Solve for the time-fixed HCW optimal L2/L1 problem using ADMM and PVT
 
 close; 
 clear; 
@@ -159,16 +159,14 @@ s(1,:) = x0.';
 
 % Computation
 for i = 1:length(nu)
+    % Add maneuver
+    s(i,3:4) = s(i,3:4) + dV(:,i).';
+    
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
-    end
-
-    % Add maneuver
-    if (norm(dV(:,i)) ~= 0)
-        s(i,3:4) = s(i,3:4) + dV(:,i).';
     end
 end
 

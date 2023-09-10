@@ -36,7 +36,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
 
     for i = 1:length(t)
         Phi(1+n*(i-1):n*i,:) = (STM(:,1+m*(i-1):m*i)\B(:,1+n*(i-1):n*i)).';
-        PhiPrimer(1:4,1+n*(i-1):n*i,:) = pinv( Phi(1+n*(i-1):n*i,:) );
+        PhiPrimer(1:m,1+n*(i-1):n*i,:) = pinv( Phi(1+n*(i-1):n*i,:) );
     end
 
     % Independent grid 
