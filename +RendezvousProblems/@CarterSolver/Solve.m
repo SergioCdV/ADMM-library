@@ -62,6 +62,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
         alpha = 1;
     end
     Problem.alpha = alpha;
+    Problem.QUIET = false;
 
     % Optimization
     tic

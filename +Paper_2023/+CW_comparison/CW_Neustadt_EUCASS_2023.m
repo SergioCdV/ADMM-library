@@ -26,32 +26,33 @@ Lc = Orbit_t(1);     % Charactertisc distance
 n = sqrt(mu/Lc^3);   % Mean motion
 Tc = 1/n;            % Characteristic time
 Vc = Lc/Tc;          % Characteristic velocity
+n = 1;               % Characteristic frequency
 
 %% Define the rendezvous problem and the STM 
-tf = 1;                      % Time of flight
+tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 100;
+N = 250;
 t = linspace(0, tf, N);
 nu = t;
 
 % Relative initial conditions
-x0 = [-0.005019; 0.01; 0.01; 0.01; 0.01; 0.01]; 
+x0 = [-0.005019; 0.01; 0.01; 0.01; 0.01; 0]; 
 
 % Relative final conditions 
 xf = zeros(6,1);
 
 % CW STM
 STM = zeros(6, 6 * N);
-Phi = STM;
 
-i = 1;
-Phi1 = [0 2*sin(nu(i)) -3*sin(nu(i)) cos(nu(i)); ...
-        0 -2*cos(nu(i)) 3*cos(nu(i)) sin(nu(i)); ...
-        0 1 -2 0; ...
-        1 3*nu(i) -6*nu(i) 2];
+CW_STM(:,1:6) = [4-3*cos(n*t.') -6*n*t.'+6*sin(n*t.') zeros(length(t),1) 3*n*sin(n*t.') -6*n+6*n*cos(n*t.') zeros(length(t),1)]; 
+CW_STM(:,7:12) = [zeros(length(t),1) ones(length(t),1) zeros(length(t),4)];
+CW_STM(:,13:18) = [zeros(length(t),2) cos(n*t.') zeros(length(t),2) -n*sin(n*t.')];
+CW_STM(:,19:24) = [sin(n*t.')/n -2/n+2*cos(n*t.')/n zeros(length(t),1) cos(n*t.') -2*sin(n*t.') zeros(length(t),1)];
+CW_STM(:,25:30) = [2/n-2*cos(n*t.')/n 4/n*sin(n*t.')-3*t.' zeros(length(t),1) 2*sin(n*t.') -3+4*cos(n*t.') zeros(length(t),1)];
+CW_STM(:,31:36) = [zeros(length(t),2) sin(n*t.')/n zeros(length(t),2) cos(n*t.')];
 
-Phi4 = [cos(nu(i)) sin(nu(i)); -sin(nu(i)) cos(nu(i))];
+Phi = zeros(6, 6 * length(t));
 
 for i = 1:length(nu)
     
@@ -62,11 +63,11 @@ for i = 1:length(nu)
 
     Phi3 = [cos(nu(i)) sin(nu(i)); -sin(nu(i)) cos(nu(i))];
 
-    Phi(:,1+6*(i-1):6*i) = blkdiag(Phi2, Phi3 * Phi4 );
-    STM(:,1+6*(i-1):6*i) = blkdiag(Phi2 * Phi1, Phi3 * (Phi4\eye(2)) );
+    Phi(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);%blkdiag(Phi2, Phi3 * Phi4 );
+    STM(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);%blkdiag(Phi2 * Phi1, Phi3 * (Phi4\eye(2)) );
 end
 
-B = repmat([0 0 0; 0 0 0; 1 0 0; 0 1 0; 0 0 0; 0 0 1], 1, length(t));
+B = repmat([zeros(3); eye(3)], 1, length(t));
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
@@ -75,30 +76,40 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-rho = 1/N;                                                % AL parameter 
-eps = [1e-5; 1e-4];                                     % Numerical tolerance
-[~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
+iter = 1;
+time = zeros(1,iter);
+rho = 1/N;                                              % AL parameter 
+eps = [1e-6; 1e-5];                                     % Numerical tolerance
+
+for i = 1:iter
+    [~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
+    time(i) = myProblem.SolveTime;
+end
 
 lambda = reshape(sol(1:6), 6, []);
 p = reshape(sol(7:end), 3, []);
 dV = myProblem.u;
 
-ti = sqrt(dot(dV, dV,1)) ~= 0;
+% Pruning
+[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
 
 %% Outcome 
 switch (myThruster.p)
     case 'L1'
         dV_norm = sum(abs(dV),1);
+        dV2_norm = sum(abs(dV2),1);
     case 'L2'
         dV_norm = sqrt(dot(dV,dV,1));
+        dV2_norm = sqrt(dot(dV2,dV2,1));
     case 'Linfty'
         dV_norm = max(abs(dV));
+        dV2_norm = max(abs(dV2));
 end
 
 switch (myThruster.q)
@@ -110,12 +121,17 @@ switch (myThruster.q)
         p_norm = max(abs(p));
 end
 
-cost_admm = myProblem.Cost * Vc * n;
-Output = myProblem.Report;
+% Impulsive times
+ti = dV_norm ~= 0;
 
-% Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
-ratio = 1-cost/cost_admm;
+% Results
+cost_pvt = sum(dV2_norm) * Vc;
+cost_admm = myProblem.Cost * Vc;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+t_imp = t(ti);
 
 %% Chaser orbit reconstruction 
 % Preallocation 
@@ -124,46 +140,50 @@ s(1,:) = x0.';
 
 % Computation
 for i = 1:length(t)
-    % Add maneuver
-    s(i, [3 4 6]) = s(i, [3 4 6]) + dV(:,i).';
-
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+6*(i-2):6*(i-1)), [6 6]);
         Phi2 = reshape(STM(:,1+6*(i-1):6*i), [6 6]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,4:6) = s(i,4:6) + dV(:,i).';
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Lc Vc * n Vc * n Vc * n], N, 1);
+% s = s .* repmat([Lc Lc Lc Vc * n Vc * n Vc * n], N, 1);
 
 %% Results 
 figure
 hold on
 plot(1:Output.Iterations, Output.objval * Vc * n); 
 grid on;
-ylabel('$-c^{T} \lambda$')
+ylabel('$\mathbf{c}^{T} \mathbf{\lambda}$')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(t, p_norm, 'filled'); 
+scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')
+legend('$t_i$', 'AutoUpdate', 'off')
+plot(t, p_norm, 'b');
 yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
 xlabel('$t$')
+xlim([0 2*pi])
 
 figure
 hold on
 stem(t, dV_norm * Vc * n, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
 xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 2*pi])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
@@ -178,10 +198,10 @@ plot3(s(:,1), s(:,2), s(:,3), 'b');
 hold off
 xlabel('$x$')
 ylabel('$y$')
-ylabel('$z$')
+zlabel('$z$')
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
 
 %% Auxiliary functions

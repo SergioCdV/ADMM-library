@@ -81,6 +81,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             alpha = 1;
         end
         Problem.alpha = alpha;
+        Problem.QUIET = false;
 
         % Solve the problem
         tic
@@ -103,7 +104,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
 
         % Check for convergence
         max_p = sort(p_norm);
-        if (max_p(end) > 1 + epsilon(1))
+        if (max_p(end) <= 1 + epsilon(1))
             GoOn = false;
         else
             iter = iter+1;
@@ -114,12 +115,12 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             Phi = Phi(logical(index),:);
         end
     end
+    
+    % Final output 
+    u = [lambda; M * lambda];
 
     % Computation of the control law
-    p = M * lambda;
-    u = [lambda; p];
-    p = z(m+1:end,end);
-    p = reshape(p, n, []);
+    p = reshape(z(m+1:end,end), n, []);
     N = size(p,2);
 
     switch (obj.Thruster.q)
@@ -162,6 +163,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         index = logical(index);
         t_pruned = t_pruned(index);
         index = kron(index, ones(1,n));
+        
     elseif (~isempty(Phi))
         t_pruned = t_pruned(logical(imp_opp));
         index = kron(imp_opp, ones(1,n));
@@ -183,12 +185,22 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             obj.Cost = max( abs(dv), [], 1 );
     end
 
+%     k = 1;
+%     for i = 1:1000:size(z,2)
+%         dv = reshape(z(m+1:end,i), n, []);
+%         dVs(:,k) = sqrt(dot(dv,dv,1));
+%         k = k+1;
+%     end
+% 
+%     figure 
+%     stem3(1:1000:size(z,2),t,dVs, 'LineStyle','none');
+
     dV = zeros(n, length(t));
     for i = 1:length(t_pruned)
         dV(:, t_pruned(i) == t) = dv(:,i);
     end
 
-    obj.Cost = sum(obj.Cost);
+    obj.Cost = dot(b,lambda);
    
     obj.Report = Output;                        % Optimization report
     obj.e(:,1) = b - M.' * reshape(dV, [], 1);  % Final missvector   

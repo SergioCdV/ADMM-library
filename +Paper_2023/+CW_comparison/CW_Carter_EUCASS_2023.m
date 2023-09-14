@@ -26,12 +26,13 @@ Lc = Orbit_t(1);     % Charactertisc distance
 n = sqrt(mu/Lc^3);   % Mean motion
 Tc = 1/n;            % Characteristic time
 Vc = Lc/Tc;          % Characteristic velocity
+n = 1;               % Characteristic frequency
 
 %% Define the rendezvous problem and the STM 
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 100;
+N = 250;
 t = linspace(0, tf, N);
 
 % Relative initial conditions
@@ -62,28 +63,39 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
-rho = 1;                                        % AL parameter 
-[~, sol, ~, myProblem] = myProblem.Solve(rho);
+iter = 25;
+time = zeros(1,iter);
+rho = N;                                        % AL parameter 
+
+for i = 1:iter
+    [~, sol, ~, myProblem2] = myProblem.Solve(rho);
+    time(i) = myProblem2.SolveTime;
+end
+myProblem = myProblem2;
 
 dV = sol(1:3,:);
 p = sol(4:6,:);
 
-ti = sqrt(dot(dV, dV,1)) ~= 0;
+% Pruning
+[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
 
 %% Outcome 
 switch (myThruster.p)
     case 'L1'
         dV_norm = sum(abs(dV),1);
+        dV2_norm = sum(abs(dV2),1);
     case 'L2'
         dV_norm = sqrt(dot(dV,dV,1));
+        dV2_norm = sqrt(dot(dV2,dV2,1));
     case 'Linfty'
         dV_norm = max(abs(dV));
+        dV2_norm = max(abs(dV2));
 end
 
 switch (myThruster.q)
@@ -95,12 +107,16 @@ switch (myThruster.q)
         p_norm = max(abs(p));
 end
 
+% Impulsive times
+ti = dV_norm >= 0.01 * max(dV_norm);
+
+% Results
 cost_admm = myProblem.Cost * Vc;
 Output = myProblem.Report;
-
-% Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
-ratio = 1-cost/cost_admm;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+t_imp = t(ti);
 
 %% Chaser orbit reconstruction 
 % Preallocation 
@@ -121,7 +137,7 @@ for i = 1:length(t)
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Lc Vc Vc Vc], N, 1);
+% s = s .* repmat([Lc Lc Lc Vc Vc Vc], N, 1);
 
 %% Results 
 figure
@@ -135,36 +151,42 @@ xlabel('Iteration $i$')
 
 figure
 hold on
-stem(t, p_norm, 'filled'); 
+scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')
+legend('$t_i$', 'AutoUpdate', 'off')
+plot(t, p_norm, 'b');
 yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
 xlabel('$t$')
+xlim([0 2*pi])
 
 figure
 hold on
-stem(t, dV_norm * Vc, 'filled'); 
+stem(t, dV_norm * Vc * n, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
 xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 2*pi])
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
 view(3)
 hold on
-scatter3(s(1,1), s(1,2), s(1,3), 'b', 'Marker', 'square');
-scatter3(s(ti,1), s(ti,2), s(ti,3), 'r', 'Marker', 'x');
-scatter3(s(end,1), s(end,2), s(end,3), 'b', 'Marker', 'o');
+scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
+scatter3(s(ti,1), s(ti,2), s(ti,3), siz2, 'r', 'Marker', 'x');
+scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot3(s(:,1), s(:,2), s(:,3), 'b'); 
 hold off
 xlabel('$x$')
 ylabel('$y$')
-ylabel('$z$')
+zlabel('$z$')
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
 
 %% Auxiliary functions

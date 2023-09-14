@@ -62,6 +62,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
         alpha = 1;
     end
     Problem.alpha = alpha;
+    Problem.QUIET = false;
 
     % Optimization
     tic
@@ -69,8 +70,18 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     obj.SolveTime = toc;
 
     % Output 
-    dV = reshape(z(:,end), n, []);  % Control sequence
+    dV = reshape(x(:,end), n, []);  % Control sequence
     u = dV; 
+
+%     k = 1;
+%     for i = 1:size(x,2)
+%         dv = reshape(x(:,i), n, []);
+%         dVs(:,k) = sqrt(dot(dv,dv,1));
+%         k = k+1;
+%     end
+% 
+%     figure 
+%     stem3(1:size(x,2),t,dVs, 'LineStyle','none');
 
     switch (obj.Thruster.p)
         case 'L2'
