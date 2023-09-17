@@ -92,7 +92,7 @@ end
 
 % Proximal minimization of the Lifty norm
 function z = lifty_shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
+    z = x - kappa * l1_bproj(x/kappa,1);
 end
 
 % Projection onto the L1 ball 

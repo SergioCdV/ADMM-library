@@ -10,7 +10,6 @@
 
 close; 
 clear; 
-clc
 
 set_graphics();
 
@@ -63,48 +62,32 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('Linfty', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
+myProblem = RendezvousProblems.HybridSolver(myMission, myThruster);
 
-iter = 1;
+iter = 25;
 time = zeros(1,iter);
-rho = N^2;                                        % AL parameter 
+rho = N;                                        % AL parameter 
 
 for i = 1:iter
-    [~, sol, ~, myProblem2] = myProblem.Solve(rho);
+    [~, u, ~, myProblem2] = myProblem.Solve(rho);
     time(i) = myProblem2.SolveTime;
 end
 myProblem = myProblem2;
 
-dV = sol(1:3,:);
-p = sol(4:6,:);
-
-% Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+dV = u(1:3,:); 
 
 %% Outcome 
 switch (myThruster.p)
     case 'L1'
         dV_norm = sum(abs(dV),1);
-        dV2_norm = sum(abs(dV2),1);
     case 'L2'
         dV_norm = sqrt(dot(dV,dV,1));
-        dV2_norm = sqrt(dot(dV2,dV2,1));
     case 'Linfty'
         dV_norm = max(abs(dV));
-        dV2_norm = max(abs(dV2));
-end
-
-switch (myThruster.q)
-    case 'L1'
-        p_norm = sum(abs(p),1);
-    case 'L2'
-        p_norm = sqrt(dot(p,p,1));
-    case 'Linfty'
-        p_norm = max(abs(p));
 end
 
 % Impulsive times
@@ -148,17 +131,6 @@ ylabel('$\Delta V_T$ [m/s]')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-
-figure
-hold on
-scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')
-legend('$t_i$', 'AutoUpdate', 'off')
-plot(t, p_norm, 'b');
-yline(1, '--')
-grid on;
-ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$t$')
-xlim([0 2*pi])
 
 figure
 hold on

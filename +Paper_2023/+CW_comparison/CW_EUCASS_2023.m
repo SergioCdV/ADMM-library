@@ -62,15 +62,15 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('Linfty', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
-iter = 25;
+iter = 1;
 time = zeros(1,iter);
-rho = N;                                        % AL parameter 
+rho = N^3;                                        % AL parameter 
 
 for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);

@@ -10,7 +10,6 @@
 
 close; 
 clear; 
-clc
 
 set_graphics();
 
@@ -57,66 +56,64 @@ end
 B = repmat([zeros(3); eye(3)], 1, length(t));
 
 %% Final mission definition 
-K = Inf;                                                % Maximum number of impulses
+K = 20;                                                 % Maximum number of impulses
 myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('Linfty', dVmin, dVmax);
+dVmax = 0.001;                                          % Maximum control authority
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
+myProblemPrimal = RendezvousProblems.PrimalSolver(myMission, myThruster);
+myProblemHybrid = RendezvousProblems.HybridSolver(myMission, myThruster);
 
-iter = 1;
-time = zeros(1,iter);
-rho = N^2;                                        % AL parameter 
+iter = 25;
+time = zeros(2,iter);
+rho = sqrt(N);                                        % AL parameter 
 
 for i = 1:iter
-    [~, sol, ~, myProblem2] = myProblem.Solve(rho);
-    time(i) = myProblem2.SolveTime;
+    [~, dVp, ~, myProblem2p] = myProblemPrimal.Solve(rho);
+    time(1,i) = myProblem2p.SolveTime;
+
+    [~, dVh, ~, myProblem2h] = myProblemHybrid.Solve(rho);
+    time(2,i) = myProblem2h.SolveTime;
 end
-myProblem = myProblem2;
 
-dV = sol(1:3,:);
-p = sol(4:6,:);
-
-% Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+dVh = dVh(1:3,:);
+myProblemPrimal = myProblem2p;
+myProblemHybrid = myProblem2h;
 
 %% Outcome 
 switch (myThruster.p)
     case 'L1'
-        dV_norm = sum(abs(dV),1);
-        dV2_norm = sum(abs(dV2),1);
+        dV_norm = sum(abs(dVp),1);
+        dV2_norm = sum(abs(dVh),1);
     case 'L2'
-        dV_norm = sqrt(dot(dV,dV,1));
-        dV2_norm = sqrt(dot(dV2,dV2,1));
+        dV_norm = sqrt(dot(dVp,dVp,1));
+        dV2_norm = sqrt(dot(dVh,dVh,1));
     case 'Linfty'
-        dV_norm = max(abs(dV));
-        dV2_norm = max(abs(dV2));
-end
-
-switch (myThruster.q)
-    case 'L1'
-        p_norm = sum(abs(p),1);
-    case 'L2'
-        p_norm = sqrt(dot(p,p,1));
-    case 'Linfty'
-        p_norm = max(abs(p));
+        dV_norm = max(abs(dVp));
+        dV2_norm = max(abs(dVh));
 end
 
 % Impulsive times
 ti = dV_norm >= 0.01 * max(dV_norm);
+ti2 = dV2_norm >= 0.01 * max(dV2_norm);
 
 % Results
-cost_admm = myProblem.Cost * Vc;
-Output = myProblem.Report;
-Time = mean(time);
-Nopt = sum(ti);
-error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+cost_h = Vc * sum(dV_norm);
+cost_p = Vc * sum(dV2_norm);
+Output = myProblemPrimal.Report;
+Output2 = myProblemHybrid.Report;
+
+Time =[mean(time(1,:)); mean(time(2,:))];
+Nopt = [sum(ti) sum(ti2)];
+error(1:2) = sqrt( dot(myProblemPrimal.e, myProblemPrimal.e, 1) ); 
+error(3:4) = sqrt( dot(myProblemHybrid.e, myProblemHybrid.e, 1) ); 
 t_imp = t(ti);
+t_imp2 = t(ti2);
 
 %% Chaser orbit reconstruction 
 % Preallocation 
@@ -133,7 +130,24 @@ for i = 1:length(t)
     end
 
     % Add maneuver
-    s(i,4:6) = s(i,4:6) + dV(:,i).';
+    s(i,4:6) = s(i,4:6) + dVp(:,i).';
+end
+
+% Preallocation 
+sh = zeros(length(t),6);
+sh(1,:) = x0.';
+
+% Computation
+for i = 1:length(t)
+    % Propagate 
+    if (i > 1)
+        Phi1 = reshape(Phi(:,1+6*(i-2):6*(i-1)), [6 6]);
+        Phi2 = reshape(Phi(:,1+6*(i-1):6*i), [6 6]);
+        sh(i,:) = sh(i-1,:) * (Phi2 * Phi1^(-1)).';
+    end
+
+    % Add maneuver
+    sh(i,4:6) = sh(i,4:6) + dVh(:,i).';
 end
 
 % Dimensionalization 
@@ -142,28 +156,22 @@ end
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+plot(1:Output.Iterations, Output.objval * Vc);
+plot(1:Output2.Iterations, Output2.objval * Vc);
 grid on;
 ylabel('$\Delta V_T$ [m/s]')
 xlabel('Iteration $i$')
+legend('Primal', 'Hybrid')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')
-legend('$t_i$', 'AutoUpdate', 'off')
-plot(t, p_norm, 'b');
-yline(1, '--')
-grid on;
-ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$t$')
-xlim([0 2*pi])
-
-figure
-hold on
+yline(dVmax * Vc, '--')
 stem(t, dV_norm * Vc * n, 'filled'); 
+stem(t, dV2_norm * Vc * n, 'Marker', 'square'); 
 grid on;
+legend('$\Delta V_{max}$', 'Primal', 'Hybrid')
 ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
 xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
@@ -177,9 +185,11 @@ view(3)
 hold on
 scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
 scatter3(s(ti,1), s(ti,2), s(ti,3), siz2, 'r', 'Marker', 'x');
+scatter3(sh(ti2,1), sh(ti2,2), sh(ti2,3), siz2, 'g', 'Marker', '+');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot3(s(:,1), s(:,2), s(:,3), 'b'); 
+plot3(sh(:,1), sh(:,2), sh(:,3), 'r'); 
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i^p$', '$\Delta \mathbf{V}_i^h$', '$\mathbf{s}_f$', '$\mathcal{C}_p$', '$\mathcal{C}_h$', 'AutoUpdate', 'off');
 hold off
 xlabel('$x$')
 ylabel('$y$')

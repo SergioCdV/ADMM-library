@@ -55,35 +55,33 @@ N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
-nu = linspace(nu_0, nu_f, N);
+t = linspace(nu_0, nu_f, N);
 
 % Control input matrix 
-B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(nu));
+B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(t));
 
 % HCW Phi
 STM = zeros(4, 4 * N);
 
 i = 1;
-Phi1 = [0 2*sin(nu(i)) -3*sin(nu(i)) cos(nu(i)); ...
-        0 -2*cos(nu(i)) 3*cos(nu(i)) sin(nu(i)); ...
+Phi1 = [0 2*sin(t(i)) -3*sin(t(i)) cos(t(i)); ...
+        0 -2*cos(t(i)) 3*cos(t(i)) sin(t(i)); ...
         0 1 -2 0; ...
-        1 3*nu(i) -6*nu(i) 2];
+        1 3*t(i) -6*t(i) 2];
 
-for i = 1:length(nu)
+for i = 1:length(t)
     
-    Phi2 = [-2*cos(nu(i)) -2*sin(nu(i)) -3*nu(i) 1; ...
-             2*sin(nu(i)) -2*cos(nu(i)) -3 0; ...
-             sin(nu(i)) -cos(nu(i)) -2 0; ...
-             cos(nu(i))  sin(nu(i)) 0 0];
+    Phi2 = [-2*cos(t(i)) -2*sin(t(i)) -3*t(i) 1; ...
+             2*sin(t(i)) -2*cos(t(i)) -3 0; ...
+             sin(t(i)) -cos(t(i)) -2 0; ...
+             cos(t(i))  sin(t(i)) 0 0];
 
     STM(:,1+4*(i-1):4*i) = Phi2 * Phi1;
-
-    pSTM(i,:) = reshape(STM(:,1+4*(i-1):4*i), 1, []);
 end
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
+myMission = LinearMission(t, STM, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
@@ -94,16 +92,15 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
-rho = 1;    % AL parameter 
+rho = N;    % AL parameter 
 
-[~, dV, ~, myProblem] = myProblem.Solve(rho);
+iter = 1; 
+time = zeros(1,iter);
 
-% Optimization
-cost_admm = myProblem.Cost * n;
-Output = myProblem.Report;
-
-% Pruning 
-[dV2, cost] = PVT_pruner(pSTM, B(:,1:2), dV, 'L2');
+for i = 1:iter
+    [~, dV, ~, myProblem] = myProblem.Solve(rho);
+    time(i) = myProblem.SolveTime;
+end
 
 %% Outcome 
 switch (myThruster.p)
@@ -115,48 +112,67 @@ switch (myThruster.p)
         dV_norm = max(abs(dV));
 end
 
+% Impulsive times
+ti = dV_norm >= 0.01 * max(dV_norm);
+
+% Results
+cost_admm = myProblem.Cost;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+t_imp = t(ti);
+
 %% Chaser orbit reconstruction 
 % Preallocation 
-s = zeros(length(nu),4);
+s = zeros(length(t),4);
 s(1,:) = x0.';
 
 % Computation
-for i = 1:length(nu)
-    % Add maneuver
-    s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
-
+for i = 1:length(t)
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
 end
 
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * n); 
+plot(1:Output.Iterations, Output.objval); 
 grid on;
-ylabel('$\Delta V_T$')
+ylabel('$\Delta V_T$ [m/s]')
 xlabel('Iteration $i$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(nu, dV_norm * n, 'filled'); 
+stem(t, dV_norm, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
-xlabel('$\nu$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
+xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 t(end)])
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
-plot(s(:,1), s(:,3)); 
+hold on
+scatter(s(1,1), s(1,3), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,3), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,3), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(s(:,1), s(:,3), 'b'); 
+hold off
 xlabel('$x$')
-ylabel('$z$')
+ylabel('$y$')
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
-% zticklabels(strrep(zticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));

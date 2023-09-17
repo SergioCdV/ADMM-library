@@ -67,7 +67,10 @@ end
 %% Auxiliary functions
 % Proximal minimization of the L1 norm
 function z = l1_shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
+    z = x;
+    for i = 1:length(x)
+        z(i) = max(0, x(i)-kappa) - max(0, -x(i)-kappa);
+    end
 end
 
 % Proximal minimization of the L2 norm
@@ -77,7 +80,7 @@ end
 
 % Proximal minimization of the Lifty norm
 function z = lifty_shrinkage(x, kappa)
-    z = max(0, x-kappa) - max(0, -x-kappa);
+    z = x - kappa * l1_bproj(x/kappa,1);
 end
 
 % Projection onto the L1 ball 

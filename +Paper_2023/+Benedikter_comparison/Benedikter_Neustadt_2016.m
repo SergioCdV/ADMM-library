@@ -55,26 +55,26 @@ N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
-nu = linspace(nu_0, nu_f, N);
+t = linspace(nu_0, nu_f, N);
 
 % Control input matrix 
-B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(nu));
+B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(t));
 
 % HCW Phi
 Phi = zeros(4, 4 * N);
 STM = zeros(4, 4 * N);
 
-Phi1 = [0 2*sin(nu(1)) -3*sin(nu(1)) cos(nu(1)); ...
-        0 -2*cos(nu(1)) 3*cos(nu(1)) sin(nu(1)); ...
+Phi1 = [0 2*sin(t(1)) -3*sin(t(1)) cos(t(1)); ...
+        0 -2*cos(t(1)) 3*cos(t(1)) sin(t(1)); ...
         0 1 -2 0; ...
-        1 3*nu(1) -6*nu(1) 2];
+        1 3*t(1) -6*t(1) 2];
 
-for i = 1:length(nu)
+for i = 1:length(t)
     
-    Phi2 = [-2*cos(nu(i)) -2*sin(nu(i)) -3*nu(i) 1; ...
-             2*sin(nu(i)) -2*cos(nu(i)) -3 0; ...
-             sin(nu(i)) -cos(nu(i)) -2 0; ...
-             cos(nu(i)) sin(nu(i)) 0 0];
+    Phi2 = [-2*cos(t(i)) -2*sin(t(i)) -3*t(i) 1; ...
+             2*sin(t(i)) -2*cos(t(i)) -3 0; ...
+             sin(t(i)) -cos(t(i)) -2 0; ...
+             cos(t(i)) sin(t(i)) 0 0];
 
     Phi(:,1+4*(i-1):4*i) = Phi2;
     STM(:,1+4*(i-1):4*i) = Phi2 * Phi1;
@@ -82,7 +82,7 @@ end
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
+myMission = LinearMission(t, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
@@ -93,18 +93,23 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-rho = 1/N^2;                                     % AL parameter 
-eps = [1e-6; 1e-4];                                     % Numerical tolerance
-[~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
+iter = 1;
+time = zeros(1,iter);
+
+rho = 1/N;                                              % AL parameter 
+eps = [1e-5; 1e-4];                                     % Numerical tolerance
+
+for i = 1:iter
+    [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
+    time(i) = myProblem2.SolveTime;
+end
+myProblem = myProblem2;
 
 lambda = reshape(sol(1:4), 4, []);
 p = reshape(sol(5:end), 2, []);
 dV = myProblem.u;
 
-% Optimization
-c = (reshape(Phi(:,end-3:end), [4 4])\xf) - (reshape(Phi(:,1:4), [4 4])\x0);
-cost_admm = myProblem.Cost;
-Output = myProblem.Report;
+%% Outcome
 
 % Norm of the primer vector 
 switch (myThruster.p)
@@ -125,58 +130,78 @@ switch (myThruster.q)
         p_norm = max(abs(p));
 end
 
+% Impulsive times
+ti = dV_norm ~= 0;
+
+% Results
+cost_admm = myProblem.Cost;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+t_imp = t(ti);
+
 %% Chaser orbit reconstruction 
 % Preallocation 
-s = zeros(length(nu),4);
+s = zeros(length(t),4);
 s(1,:) = x0.';
 
 % Computation
-for i = 1:length(nu)
-    % Add maneuver
-    s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
-
+for i = 1:length(t)
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
 end
 
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * n); 
+plot(1:Output.Iterations, Output.objval * Vc); 
 grid on;
-ylabel('$-c^{T} \lambda$')
+ylabel('$\mathbf{c}^{T} \mathbf{\lambda}$')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(nu, p_norm, 'filled'); 
+scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')
+legend('$t_i$', 'AutoUpdate', 'off')
+plot(t, p_norm, 'b');
 yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$\nu$')
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
+xlabel('$t$')
+xlim([0 t(end)])
 
 figure
 hold on
-stem(nu, dV_norm * n, 'filled'); 
+stem(t, dV_norm * Vc, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
-xlabel('$\nu$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
+xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 t(end)])
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
-plot(s(:,1), s(:,3)); 
+hold on
+scatter(s(1,1), s(1,3), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,3), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,3), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(s(:,1), s(:,3), 'b'); 
+hold off
 xlabel('$x$')
 ylabel('$y$')
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
-% zticklabels(strrep(zticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));

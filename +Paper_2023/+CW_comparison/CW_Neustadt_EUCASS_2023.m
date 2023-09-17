@@ -76,7 +76,7 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('Linfty', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
@@ -88,9 +88,10 @@ rho = 1/N;                                              % AL parameter
 eps = [1e-6; 1e-5];                                     % Numerical tolerance
 
 for i = 1:iter
-    [~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
-    time(i) = myProblem.SolveTime;
+    [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
+    time(i) = myProblem2.SolveTime;
 end
+myProblem = myProblem2;
 
 lambda = reshape(sol(1:6), 6, []);
 p = reshape(sol(7:end), 3, []);
