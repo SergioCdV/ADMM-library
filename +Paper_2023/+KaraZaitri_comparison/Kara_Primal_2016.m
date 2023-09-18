@@ -18,7 +18,7 @@ set_graphics();
 mu = 3.986e14;       % Gauss constant for the Earth
 
 % Target orbital elements
-Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
+Orbit_t = [7011e3 0.004 deg2rad(190) deg2rad(98) 0 0];
 
 nu_0 = 0;            % Initial true anomaly
 nu_f = 24*pi;        % Final true anomaly 
@@ -53,7 +53,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 300;
+N = 400;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -94,7 +94,7 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
-rho = N;    % AL parameter 
+rho = N^2;    % AL parameter 
 
 iter = 1; 
 time = zeros(1,iter);

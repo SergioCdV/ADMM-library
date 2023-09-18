@@ -53,7 +53,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 100;
+N = 400;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -164,7 +164,7 @@ for i = 1:length(t)
 end
 
 % Dimensionalization 
-% s = s .* repmat([Lc Lc Vc Vc], N, 1);
+s = s .* repmat([Lc Lc Vc Vc], N, 1);
 
 %% Results 
 figure
@@ -207,8 +207,10 @@ scatter(s(end,1), s(end,3), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot(s(:,1), s(:,3), 'b'); 
 hold off
-xlabel('$x$')
-ylabel('$y$')
+xlabel('$x$ [m]')
+ylabel('$y$ [m]')
 grid on;
+ylim([-0.01 0.2])
+xlim([-10e3 100])
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));

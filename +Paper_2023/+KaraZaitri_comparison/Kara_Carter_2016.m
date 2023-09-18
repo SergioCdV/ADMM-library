@@ -53,7 +53,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 500;
+N = 400;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -95,7 +95,7 @@ myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = N;                                        % AL parameter 
+rho = N^3;                                        % AL parameter 
 
 for i = 1:iter
     [~, sol, ~, myProblem2] = myProblem.Solve(rho);
