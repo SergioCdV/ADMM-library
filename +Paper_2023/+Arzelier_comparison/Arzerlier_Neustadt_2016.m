@@ -22,7 +22,6 @@ mu = 3.986e14;       % Gauss constant for the Earth
 Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
 
 nu_0 = 0;            % Initial true anomaly
-nu_f = 8.1832;       % Final true anomaly 
 
 % Mean motion
 n = sqrt(mu/Orbit_t(1)^3);      
@@ -30,6 +29,12 @@ n = sqrt(mu/Orbit_t(1)^3);
 % Mission time
 t0 = 0;              % Initial clock
 tf = 7200;           % Final clock
+% tf = 55350;
+
+K = floor(tf/(2*pi/n));
+dt = tf - K * (2*pi/n);
+
+nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), nu_0, dt);      % Final true anomaly 
 
 % Initial relative conditions 
 x0 = [-30 0.5 8.514e-3 0]*1e3;     % In-plane rendezvous
@@ -55,11 +60,23 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 150;
+N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
 nu = linspace(nu_0, nu_f, N);
+t = nu;
+
+K = 0;
+for i = 1:length(nu)
+    dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+    if (i > 2)
+        if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+            K = K+1;
+        end
+    end
+    t(i) = 2*K*pi + dt;
+end
 
 % Control input matrix
 B = repmat([zeros(2); eye(2)], 1, length(nu));
@@ -107,27 +124,29 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-rho = 1/N^2;                                     % AL parameter 
-eps = [1e-6; 1e-4];                                     % Numerical tolerance
-[~, sol, ~, myProblem] = myProblem.Solve(eps, rho);
+iter = 1;
+time = zeros(1,iter);
+
+rho = 1/N;                          % AL parameter 
+eps = [1e-6; 1e-5];                 % Numerical tolerance
+
+for i = 1:iter
+    [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
+    time(i) = myProblem2.SolveTime;
+end
+myProblem = myProblem2;
 
 lambda = reshape(sol(1:4), 4, []);
 p = reshape(sol(5:end), 2, []);
 dV = myProblem.u;
 
-% Optimization
-c = (reshape(Phi(:,end-3:end), [4 4])\xf) - (reshape(Phi(:,1:4), [4 4])\x0);
-lambda_arz = [-1.177; 1.132; -1.57; 14.36]*1e-4;
-cost_arz = -c.' * lambda_arz;
-cost_admm = myProblem.Cost * Vc;
-Output = myProblem.Report;
-
+%% Outcome
 % Norm of the primer vector 
 switch (myThruster.p)
     case 'L1'
@@ -147,6 +166,22 @@ switch (myThruster.q)
         p_norm = max(abs(p));
 end
 
+% Impulsive times
+ti = dV_norm ~= 0;
+
+% Results
+cost_admm = myProblem.Cost;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+nu_imp = nu(ti);
+t_imp = t(ti) * Tc;
+
+c = (reshape(Phi(:,end-3:end), [4 4])\xf) - (reshape(Phi(:,1:4), [4 4])\x0);
+lambda_arz = [-1.177; 1.132; -1.57; 14.36]*1e-4;
+cost_arz = -c.' * lambda_arz;
+
 %% Chaser orbit reconstruction 
 % Preallocation 
 s = zeros(length(nu),4);
@@ -154,58 +189,68 @@ s(1,:) = x0.';
 
 % Computation
 for i = 1:length(nu)
-    % Add maneuver
-    s(i,3:4) = s(i,3:4) + dV(:,i).';
-
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Vc Vc], N, 1);
+s = s .* repmat([Lc/1e3 Lc/1e3 Vc Vc], N, 1);
 
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval); 
-yline(cost_arz, '--')
+plot(1:Output.Iterations, Output.objval * Vc); 
 grid on;
-ylabel('$-c^{T} \lambda$')
+ylabel('$\mathbf{c}^{T} \mathbf{\lambda}$ [m/s]')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(nu, p_norm, 'filled'); 
+scatter(nu_imp, ones(1,length(nu_imp)), 1e2, 'r', 'Marker', 'x')
+legend('$t_i$', 'AutoUpdate', 'off')
+plot(nu, p_norm, 'b');
 yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$\nu$')
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
+xlabel('$\theta$')
+xlim([nu(1) nu(end)])
 
 figure
 hold on
 stem(nu, dV_norm * Vc, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
-xlabel('$\nu$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
+xlabel('$\theta$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([nu(1) nu(end)])
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
-plot(s(:,1), s(:,2)); 
-xlabel('$x$')
-ylabel('$z$')
+hold on
+scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(s(:,1), s(:,2), 'b'); 
+hold off
+xlabel('$x$ [km]')
+ylabel('$y$ [km]')
+% xlim([-1.1e3 100])
+% ylim([-20 200])
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
-% zticklabels(strrep(zticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 
 %% Auxiliary function 
 function [dt] = KeplerEquation(n, e, nu_0, nu_f)
@@ -230,4 +275,36 @@ function [dt] = KeplerEquation(n, e, nu_0, nu_f)
         dM = Mf-M0;
     end
     dt = dM/n;
+end
+
+function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
+    % Initial mean anomaly 
+    M = M0 + n * dt;
+
+    % Newton-method 
+    iter = 1; 
+    maxIter = 100; 
+    GoOn = true; 
+    tol = 1e-15;
+    E = M;
+
+    while (GoOn && iter < maxIter)
+        f = E - e * sin(E) - M; 
+        df = 1 - e * cos(E);
+
+        ds = -f/df;
+        E = E + ds; 
+
+        if (abs(ds) < tol)
+            GoOn = false;
+        else
+            iter = iter+1;
+        end
+    end
+
+    % Final true anomaly 
+    sin_nu = (sqrt(1-e^2) * sin(E)) / (1 - e * cos(E));
+    cos_nu = (-e + cos(E)) / (1 - e * cos(E));
+    nu_f = atan2(sin_nu, cos_nu);
+    nu_f = mod(nu_f,2*pi);
 end

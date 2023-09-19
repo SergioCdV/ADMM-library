@@ -121,13 +121,15 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
-rho = 1e1;    % AL parameter 
+rho = N^2;    % AL parameter 
 
-[~, dV, ~, myProblem] = myProblem.Solve(rho);
+iter = 1; 
+time = zeros(1,iter);
 
-% Optimization
-cost_admm = myProblem.Cost * Vc;
-Output = myProblem.Report;
+for i = 1:iter
+    [~, dV, ~, myProblem] = myProblem.Solve(rho);
+    time(i) = myProblem.SolveTime;
+end
 
 %% Outcome 
 switch (myThruster.p)
@@ -138,6 +140,18 @@ switch (myThruster.p)
     case 'Linfty'
         dV_norm = max(abs(dV));
 end
+
+% Impulsive times
+ti = dV_norm >= 0.01 * max(dV_norm);
+
+% Results
+cost_admm = myProblem.Cost;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+nu_imp = nu(ti);
+t_imp = t(ti) * Tc;
 
 %% Chaser orbit reconstruction 
 % Preallocation 
@@ -163,28 +177,40 @@ s = s .* repmat([Lc Lc Vc Vc], N, 1);
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+plot(1:Output.Iterations, Output.objval * Vc * 100); 
 grid on;
-ylabel('$\Delta V_T$ [m/s]')
+ylabel('$\Delta V_T$ [cm/s]')
 xlabel('Iteration $i$')
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(nu, dV_norm * Vc, 'filled'); 
+stem(nu, dV_norm * Vc * 100, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$ [m/s]')
-xlabel('$\nu$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [cm/s]')
+xlabel('$\theta$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 nu(end)])
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
-plot(s(:,1), s(:,2)); 
-xlabel('$x$')
-ylabel('$z$')
+hold on
+scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(s(:,1), s(:,2), 'b'); 
+hold off
+xlabel('$x$ [m]')
+ylabel('$y$ [m]')
+% xlim([-1.1e3 100])
+% ylim([-20 200])
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
-% zticklabels(strrep(zticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 
 %% Auxiliary function 
 function [dt] = KeplerEquation(n, e, nu_0, nu_f)

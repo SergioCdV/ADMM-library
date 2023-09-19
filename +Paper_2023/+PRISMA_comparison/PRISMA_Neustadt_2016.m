@@ -27,17 +27,22 @@ nu_0 = 0;           % Initial true anomaly
 n = sqrt(mu/Orbit_t(1)^3);      
 
 % Mission time
-t0 = 0;              % Initial clock
-tf = 64620;          % Final clock
+t0 = 0;                 % Initial clock
+tf = 64620;             % Final clock
+tf = 84360;
 
-K = tf/(2*pi/n);
+K = floor(tf/(2*pi/n));
+dt = tf - K * (2*pi/n);
 
-nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), 0, tf);       % Final true anomaly 
+nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), nu_0, dt);       % Final true anomaly 
 
 % Initial relative conditions 
 x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
 xf = [-100 0 0 0];      % Final conditions
    
+x0 = [5000 0 0 0];      % In-plane rendezvous
+xf = [1000 0 0 0];      % Final conditions
+
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
 Tc = 1/n;               % Characteristic time
@@ -58,7 +63,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 200;
+N = 200; 
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -128,10 +133,10 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-iter = 1;
+iter = 25;
 time = zeros(1,iter);
 
-rho = 1/N^2;                                     % AL parameter 
+rho = 1/N^3;                                     % AL parameter 
 eps = [1e-6; 1e-5];                                     % Numerical tolerance
 
 for i = 1:iter
@@ -183,15 +188,15 @@ s(1,:) = x0.';
 
 % Computation
 for i = 1:length(nu)
-    % Add maneuver
-    s(i,3:4) = s(i,3:4) + dV(:,i).';
-
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
 % Dimensionalization 
@@ -240,6 +245,8 @@ plot(s(:,1), s(:,2), 'b');
 hold off
 xlabel('$x$ [m]')
 ylabel('$y$ [m]')
+% xlim([-1.1e3 100])
+% ylim([-20 200])
 grid on;
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));

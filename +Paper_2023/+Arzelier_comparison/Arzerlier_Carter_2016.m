@@ -61,6 +61,18 @@ N = 75;
 %% Define the rendezvous problem and the STM %%
 % Time span
 nu = linspace(nu_0, nu_f, N);
+t = nu;
+
+K = 0;
+for i = 1:length(nu)
+    dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+    if (i > 2)
+        if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+            K = K+1;
+        end
+    end
+    t(i) = 2*K*pi + dt;
+end
 
 % Control input matrix 
 B = repmat([zeros(2); eye(2)], 1, length(nu));
@@ -113,15 +125,18 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
-rho = 1e1;  % AL parameter 
+iter = 1;
+time = zeros(1,iter);
+rho = N^3;                                        % AL parameter 
 
-[~, sol, ~, myProblem] = myProblem.Solve(rho);
+for i = 1:iter
+    [~, sol, ~, myProblem2] = myProblem.Solve(rho);
+    time(i) = myProblem2.SolveTime;
+end
+myProblem = myProblem2;
+
 p = sol(3:4,:);
 dV = sol(1:2,:);
-
-% Optimization
-cost_admm = myProblem.Cost * Vc;
-Output = myProblem.Report;
 
 %% Outcome 
 switch (myThruster.p)
@@ -142,6 +157,18 @@ switch (myThruster.q)
         p_norm = max(abs(p));
 end
 
+% Impulsive times
+ti = dV_norm >= 0.01 * max(dV_norm);
+
+% Results
+cost_admm = myProblem.Cost;
+Output = myProblem.Report;
+Time = mean(time);
+Nopt = sum(ti);
+error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
+nu_imp = nu(ti);
+t_imp = t(ti) * Tc;
+
 %% Chaser orbit reconstruction 
 % Preallocation 
 s = zeros(length(nu),4);
@@ -149,15 +176,15 @@ s(1,:) = x0.';
 
 % Computation
 for i = 1:length(nu)
-    % Add maneuver
-    s(i,3:4) = s(i,3:4) + dV(:,i).';
-
     % Propagate 
     if (i > 1)
         Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
         Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
         s(i,:) = s(i-1,:) * (Phi2 * Phi1^(-1)).';
     end
+
+    % Add maneuver
+    s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
 % Dimensionalization 
@@ -166,38 +193,51 @@ s = s .* repmat([Lc Lc Vc Vc], N, 1);
 %% Results 
 figure
 hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+plot(1:Output.Iterations, Output.objval * Vc * 100); 
 grid on;
-ylabel('$\Delta V_T$')
+ylabel('$\Delta V_T$ [cm/s]')
 xlabel('Iteration $i$')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
 
 figure
 hold on
-stem(nu, p_norm, 'filled'); 
+scatter(nu_imp, ones(1,length(nu_imp)), 1e2, 'r', 'Marker', 'x')
+legend('$t_i$', 'AutoUpdate', 'off')
+plot(nu, p_norm, 'b');
 yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
-xlabel('$\nu$')
+xlabel('$\theta$')
+xlim([0 nu(end)])
 
 figure
 hold on
-stem(nu, dV_norm * Vc, 'filled'); 
+stem(nu, dV_norm * Vc * 100, 'filled'); 
 grid on;
-ylabel('$\|\Delta \mathbf{V}\|$')
-xlabel('$\nu$')
+ylabel('$\|\Delta \mathbf{V}\|_p$ [cm/s]')
+xlabel('$\theta$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 nu(end)]);
 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
-plot(s(:,1), s(:,2)); 
-xlabel('$x$')
-ylabel('$z$')
+hold on
+scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(s(:,1), s(:,2), 'b'); 
+hold off
+xlabel('$x$ [m]')
+ylabel('$y$ [m]')
+% xlim([-1.1e3 100])
+% ylim([-20 200])
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
-% zticklabels(strrep(zticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 
 %% Auxiliary function 
 function [dt] = KeplerEquation(n, e, nu_0, nu_f)

@@ -119,11 +119,11 @@ myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
+myProblem = RendezvousProblems.HybridSolver(myMission, myThruster);
 
 rho = N^2;    % AL parameter 
 
@@ -134,6 +134,8 @@ for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);
     time(i) = myProblem.SolveTime;
 end
+
+dV = dV(3:4,:);
 
 %% Outcome 
 switch (myThruster.p)
@@ -155,6 +157,7 @@ Time = mean(time);
 Nopt = sum(ti);
 error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
 t_imp = t(ti);
+
 %% Chaser orbit reconstruction 
 % Preallocation 
 s = zeros(length(nu),4);
