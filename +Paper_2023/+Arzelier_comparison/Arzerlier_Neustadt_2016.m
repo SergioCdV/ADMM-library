@@ -245,7 +245,7 @@ legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate'
 plot(s(:,1), s(:,2), 'b'); 
 hold off
 xlabel('$x$ [km]')
-ylabel('$y$ [km]')
+ylabel('$z$ [km]')
 % xlim([-1.1e3 100])
 % ylim([-20 200])
 grid on;

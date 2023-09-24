@@ -202,7 +202,7 @@ for i = 1:length(nu)
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Vc Vc], N, 1);
+s = s .* repmat([Lc/1e3 Lc/1e3 Vc Vc], N, 1);
 
 %% Results 
 figure
@@ -245,8 +245,8 @@ scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot(s(:,1), s(:,2), 'b'); 
 hold off
-xlabel('$x$ [m]')
-ylabel('$y$ [m]')
+xlabel('$x$ [km]')
+ylabel('$z$ [km]')
 % xlim([-1.1e3 100])
 % ylim([-20 200])
 grid on;

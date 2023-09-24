@@ -20,21 +20,28 @@ set_graphics();
 mu = 3.986e14;       % Gauss constant for the Earth
 
 % Target orbital elements
-Orbit_t = [6763e3 0.0052 0 deg2rad(52) 0 0];
+Orbit_t = [106246.9753e3 0.798788 pi/2 deg2rad(5.2) deg2rad(180) 0];
 
-nu_0 = 0;            % Initial true anomaly
-nu_f = 8.1832;       % Final true anomaly 
-
+nu_0 = deg2rad(135);            % Initial true anomaly
+       
 % Mean motion
 n = sqrt(mu/Orbit_t(1)^3);      
 
 % Mission time
-t0 = 0;              % Initial clock
-tf = 7200;           % Final clock
+t0 = 7;              % Initial clock
+tf = 50002;          % Final clock
+
+% Final true anomaly
+e = Orbit_t(2);
+cos_E = (e + cos(nu_0)) / (1 + e * cos(nu_0));
+sin_E = (sqrt(1-e^2)*sin(nu_0)) / (1 + e * cos(nu_0));
+E = atan2(sin_E, cos_E);
+M0 = E - Orbit_t(2)*sin(E);
+nu_f = InverseKeplerEquation(n, Orbit_t(2), M0, tf-t0);
 
 % Initial relative conditions 
-x0 = [-30 0.5 8.514e-3 0]*1e3;  % In-plane rendezvous
-xf = [-100 0 0 0];              % Final conditions
+x0 = [18309.5 -23764.7 -0.0542 -0.0418];              % In-plane rendezvous
+xf = [335.12 -371.1 0.00155 0.00140];                 % Final conditions
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -56,11 +63,23 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 75;
+N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
 nu = linspace(nu_0, nu_f, N);
+t = nu;
+
+K = 0;
+for i = 1:length(nu)
+    dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+    if (i > 2)
+        if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+            K = K+1;
+        end
+    end
+    t(i) = 2*K*pi + dt;
+end
 
 % Control input matrix 
 B = repmat([zeros(2); eye(2)], 1, length(nu));
@@ -176,7 +195,7 @@ for i = 1:length(nu)
 end
 
 % Dimensionalization 
-s = s .* repmat([Lc Lc Vc Vc], N, 1);
+s = s .* repmat([Lc/1e3 Lc/1e3 Vc Vc], N, 1);
 
 %% Results 
 figure
@@ -197,7 +216,7 @@ yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
 xlabel('$\theta$')
-xlim([0 nu(end)])
+xlim([nu(1) nu(end)])
 
 figure
 hold on
@@ -207,7 +226,7 @@ ylabel('$\|\Delta \mathbf{V}\|_p$ [cm/s]')
 xlabel('$\theta$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-xlim([0 nu(end)])
+xlim([nu(1) nu(end)])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
@@ -219,8 +238,8 @@ scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot(s(:,1), s(:,2), 'b'); 
 hold off
-xlabel('$x$ [m]')
-ylabel('$y$ [m]')
+xlabel('$x$ [km]')
+ylabel('$z$ [km]')
 % xlim([-1.1e3 100])
 % ylim([-20 200])
 grid on;
@@ -250,4 +269,36 @@ function [dt] = KeplerEquation(n, e, nu_0, nu_f)
         dM = Mf-M0;
     end
     dt = dM/n;
+end
+
+function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
+    % Initial mean anomaly 
+    M = M0 + n * dt;
+
+    % Newton-method 
+    iter = 1; 
+    maxIter = 100; 
+    GoOn = true; 
+    tol = 1e-15;
+    E = M;
+
+    while (GoOn && iter < maxIter)
+        f = E - e * sin(E) - M; 
+        df = 1 - e * cos(E);
+
+        ds = -f/df;
+        E = E + ds; 
+
+        if (abs(ds) < tol)
+            GoOn = false;
+        else
+            iter = iter+1;
+        end
+    end
+
+    % Final true anomaly 
+    sin_nu = (sqrt(1-e^2) * sin(E)) / (1 - e * cos(E));
+    cos_nu = (-e + cos(E)) / (1 - e * cos(E));
+    nu_f = atan2(sin_nu, cos_nu);
+    nu_f = mod(nu_f,2*pi);
 end

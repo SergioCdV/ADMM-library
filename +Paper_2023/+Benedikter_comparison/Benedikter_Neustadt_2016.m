@@ -31,7 +31,7 @@ t0 = 0;                 % Initial clock
 tf = 7200;              % Final clock
 
 % Initial relative conditions 
-x0 = [-pi 1/4 1/6 0];   % In-plane rendezvous
+x0 = [-pi 1/6 1/4 0];   % In-plane rendezvous
 xf = [0 0 0 0];         % Final conditions
    
 % Dimensionalization (canonical units)
@@ -58,23 +58,23 @@ N = 100;
 t = linspace(nu_0, nu_f, N);
 
 % Control input matrix 
-B = repmat([0 0; 1 0; 0 0; 0 1], 1, length(t));
+B = repmat([zeros(2); eye(2)], 1, length(t));
 
 % HCW Phi
 Phi = zeros(4, 4 * N);
 STM = zeros(4, 4 * N);
 
-Phi1 = [0 2*sin(t(1)) -3*sin(t(1)) cos(t(1)); ...
-        0 -2*cos(t(1)) 3*cos(t(1)) sin(t(1)); ...
-        0 1 -2 0; ...
-        1 3*t(1) -6*t(1) 2];
+Phi1 = [0 -3*sin(t(1)) 2*sin(t(1)) cos(t(1)); ...
+        0 -2 1 0; ...
+        0  3*cos(t(1)) -2*cos(t(1)) sin(t(1)); ...
+        1 -6*t(1) 3*t(1) 2];
 
 for i = 1:length(t)
     
-    Phi2 = [-2*cos(t(i)) -2*sin(t(i)) -3*t(i) 1; ...
-             2*sin(t(i)) -2*cos(t(i)) -3 0; ...
-             sin(t(i)) -cos(t(i)) -2 0; ...
-             cos(t(i)) sin(t(i)) 0 0];
+    Phi2 = [-2*cos(t(i)) -3*t(i) -2*sin(t(i)) 1; ...
+         sin(t(i)) -2 -cos(t(i)) 0; ...
+         2*sin(t(i)) -3 -2*cos(t(i)) 0; ...
+         cos(t(i)) 0 sin(t(i)) 0];
 
     Phi(:,1+4*(i-1):4*i) = Phi2;
     STM(:,1+4*(i-1):4*i) = Phi2 * Phi1;
@@ -156,7 +156,7 @@ for i = 1:length(t)
     end
 
     % Add maneuver
-    s(i,[2 4]) = s(i,[2 4]) + dV(:,i).';
+    s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
 %% Results 
@@ -178,7 +178,7 @@ yline(1, '--')
 grid on;
 ylabel('$\|\mathbf{p}\|_q$')
 xlabel('$t$')
-xlim([0 t(end)])
+xlim([t(1) t(end)])
 
 figure
 hold on
@@ -188,20 +188,50 @@ ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
 xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-xlim([0 t(end)])
+xlim([t(1) t(end)])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
 figure 
 hold on
-scatter(s(1,1), s(1,3), siz, 'b', 'Marker', 'square');
-scatter(s(ti,1), s(ti,3), siz2, 'r', 'Marker', 'x');
-scatter(s(end,1), s(end,3), siz, 'b', 'Marker', 'o');
+scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
+scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
+scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
-plot(s(:,1), s(:,3), 'b'); 
+plot(s(:,1), s(:,2), 'b'); 
+hold off
+xlabel('$x$')
+ylabel('$z$')
+grid on;
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
+
+%% Absolute dynamics figure
+S = [s(:,1) -1.2 * ones(length(t),1)+s(:,2)];
+
+% Rotation 
+for i = 1:length(t)
+    o21 = [0; 1; 0];
+    o31 = -[cos(t(i)); 0; sin(t(i))];
+    o11 = cross(o21, o31);
+    Q = [o11 o31];
+    S(i,1:2) = S(i,1:2) * Q([1 3], :).';
+end
+
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
+figure 
+hold on
+scatter(S(1,1), S(1,2), siz, 'b', 'Marker', 'square');
+scatter(S(ti,1), S(ti,2), siz2, 'r', 'Marker', 'x');
+scatter(S(end,1), S(end,2), siz, 'b', 'Marker', 'o');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
+plot(S(:,1), S(:,2), 'b'); 
+fplot(@(t) cos(t), @(t) sin(t), 'k--');
+fplot(@(t) 1.2*cos(t), @(t) 1.2*sin(t), 'k');
 hold off
 xlabel('$x$')
 ylabel('$y$')
 grid on;
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));

@@ -29,7 +29,7 @@ n = sqrt(mu/Orbit_t(1)^3);
 % Mission time
 t0 = 0;                 % Initial clock
 tf = 64620;             % Final clock
-tf = 84360;
+% tf = 84360;
 
 K = floor(tf/(2*pi/n));
 dt = tf - K * (2*pi/n);
@@ -40,8 +40,8 @@ nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), nu_0, dt);       % Final tr
 x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
 xf = [-100 0 0 0];      % Final conditions
    
-x0 = [5000 0 0 0];      % In-plane rendezvous
-xf = [1000 0 0 0];      % Final conditions
+% x0 = [5000 0 0 0];      % In-plane rendezvous
+% xf = [1000 0 0 0];      % Final conditions
 
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -133,7 +133,7 @@ myThruster = thruster('L2', dVmin, dVmax);
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-iter = 25;
+iter = 1;
 time = zeros(1,iter);
 
 rho = 1/N^3;                                     % AL parameter 
@@ -244,7 +244,7 @@ legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate'
 plot(s(:,1), s(:,2), 'b'); 
 hold off
 xlabel('$x$ [m]')
-ylabel('$y$ [m]')
+ylabel('$z$ [m]')
 % xlim([-1.1e3 100])
 % ylim([-20 200])
 grid on;
