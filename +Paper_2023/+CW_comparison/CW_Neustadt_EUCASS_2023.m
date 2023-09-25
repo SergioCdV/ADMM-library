@@ -52,19 +52,9 @@ CW_STM(:,19:24) = [sin(n*t.')/n -2/n+2*cos(n*t.')/n zeros(length(t),1) cos(n*t.'
 CW_STM(:,25:30) = [2/n-2*cos(n*t.')/n 4/n*sin(n*t.')-3*t.' zeros(length(t),1) 2*sin(n*t.') -3+4*cos(n*t.') zeros(length(t),1)];
 CW_STM(:,31:36) = [zeros(length(t),2) sin(n*t.')/n zeros(length(t),2) cos(n*t.')];
 
-Phi = zeros(6, 6 * length(t));
-
 for i = 1:length(nu)
-    
-    Phi2 = [-2*cos(nu(i)) -2*sin(nu(i)) -3*nu(i) 1; ...
-             2*sin(nu(i)) -2*cos(nu(i)) -3 0; ...
-             sin(nu(i)) -cos(nu(i)) -2 0; ...
-             cos(nu(i))  sin(nu(i)) 0 0];
-
-    Phi3 = [cos(nu(i)) sin(nu(i)); -sin(nu(i)) cos(nu(i))];
-
-    Phi(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);%blkdiag(Phi2, Phi3 * Phi4 );
-    STM(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);%blkdiag(Phi2 * Phi1, Phi3 * (Phi4\eye(2)) );
+    Phi(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);
+    STM(:,1+6*(i-1):6*i) = reshape(CW_STM(i,:), [6 6]);
 end
 
 B = repmat([zeros(3); eye(3)], 1, length(t));

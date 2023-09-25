@@ -61,7 +61,7 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
+dVmax = 0.01;                                            % Maximum control authority
 myThruster = thruster('Linfty', dVmin, dVmax);
 
 %% Optimization
@@ -76,9 +76,9 @@ for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);
     time(i) = myProblem.SolveTime;
 end
-
+%%
 % Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+[dV2, cost] = PVT_pruner(Phi, B, dV);
 
 %% Outcome 
 switch (myThruster.p)

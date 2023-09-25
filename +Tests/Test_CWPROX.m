@@ -85,7 +85,7 @@ for j = 1:length(TOF)
     cost_admm = sum(sqrt(dot(dV,dV,1)));
 
     %% Pruning
-    [dV2, cost(j)] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+    [dV2, cost(j)] = PVT_pruner(STM, [zeros(3); eye(3)], dV);
 
     %% Optimality (PVT) checks 
     G = zeros(6,6);

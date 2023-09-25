@@ -8,6 +8,9 @@
 % This script provides several test cases for the PVT pruner for linear
 % systems, as provided by Prussing
 
+clear; 
+clc; 
+
 %% Test case I %%
 % Time span
 t = 0:1e-1:3;               
@@ -21,11 +24,13 @@ dV(:, t == 2) = [3; 4];
 B = [1 0; 0 1];
 
 % STM 
-Phi = repmat([1 1 0 1], length(t), 1);
-Phi(:,2) = t.';
+Phi = repmat([1 1; 0 1], 1, length(t));
+for i = 1:length(t)
+    Phi(1,2*i) = t(i);
+end
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV, 'L2');
+[dV, cost] = PVT_pruner(Phi, B, dV);
 
 %% Test case II %%
 % Time span
@@ -41,6 +46,7 @@ B = [0; 1];
 
 % STM 
 Phi = [cos(t).' sin(t.') -sin(t.') cos(t.')];
+Phi = reshape(Phi.', 2, []);
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV, 'L2');
+[dV, cost] = PVT_pruner(Phi, B, dV);

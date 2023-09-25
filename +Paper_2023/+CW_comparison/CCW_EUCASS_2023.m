@@ -62,14 +62,14 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = 0.001;                                          % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblemPrimal = RendezvousProblems.PrimalSolver(myMission, myThruster);
 myProblemHybrid = RendezvousProblems.HybridSolver(myMission, myThruster);
 
-iter = 25;
+iter = 1;
 time = zeros(2,iter);
 rho = sqrt(N);                                        % AL parameter 
 
@@ -84,6 +84,8 @@ end
 dVh = dVh(1:3,:);
 myProblemPrimal = myProblem2p;
 myProblemHybrid = myProblem2h;
+
+[dVp, cost] = PVT_pruner(Phi, B, dVp, dVmax);
 
 %% Outcome 
 switch (myThruster.p)
