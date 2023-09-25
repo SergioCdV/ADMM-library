@@ -36,7 +36,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
 
     for i = 1:length(t)
         Phi(1+n*(i-1):n*i,:) = (STM(:,1+m*(i-1):m*i)\B(:,1+n*(i-1):n*i)).';
-        PhiPrimer(1:m,1+n*(i-1):n*i,:) = pinv( Phi(1+n*(i-1):n*i,:) );
     end
 
     % Independent grid 
@@ -66,8 +65,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     
         % Create the functions to be solved 
         Obj = @(x,z)(obj.objective(v, z));
-        X_update = @(x,z,u)(obj.x_update(m, Theta, v, PhiPrimer, rho, x, z, u));
-        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.q, obj.Mission.N, Phi, -b, rho, x, z, u));
+        X_update = @(x,z,u)(obj.x_update(m, Theta, v, rho, x, z, u));
+        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.q, Phi, -b, rho, x, z, u));
     
         % ADMM consensus constraint definition 
         A = eye(m + n * N);

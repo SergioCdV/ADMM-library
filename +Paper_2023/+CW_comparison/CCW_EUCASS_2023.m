@@ -62,7 +62,7 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = 0.001;                                          % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
@@ -84,8 +84,6 @@ end
 dVh = dVh(1:3,:);
 myProblemPrimal = myProblem2p;
 myProblemHybrid = myProblem2h;
-
-[dVp, cost] = PVT_pruner(Phi, B, dVp, dVmax);
 
 %% Outcome 
 switch (myThruster.p)
@@ -182,12 +180,14 @@ xlim([0 2*pi])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
+siz3 = repmat(100, sum(ti2), 1);
 figure 
 view(3)
+
 hold on
 scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
 scatter3(s(ti,1), s(ti,2), s(ti,3), siz2, 'r', 'Marker', 'x');
-scatter3(sh(ti2,1), sh(ti2,2), sh(ti2,3), siz2, 'g', 'Marker', '+');
+scatter3(sh(ti2,1), sh(ti2,2), sh(ti2,3), siz3, 'g', 'Marker', '+');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
 plot3(s(:,1), s(:,2), s(:,3), 'b'); 
 plot3(sh(:,1), sh(:,2), sh(:,3), 'r'); 

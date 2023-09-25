@@ -61,7 +61,7 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 0.01;                                            % Maximum control authority
+dVmax = 0;                                            % Maximum control authority
 myThruster = thruster('Linfty', dVmin, dVmax);
 
 %% Optimization
@@ -70,13 +70,13 @@ myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = N^3;                                        % AL parameter 
+rho = 1e4;                                        % AL parameter 
 
 for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);
     time(i) = myProblem.SolveTime;
 end
-%%
+
 % Pruning
 [dV2, cost] = PVT_pruner(Phi, B, dV);
 

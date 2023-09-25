@@ -12,7 +12,7 @@
 % Outputs: - vector z, the update impulsive sequence
 
 % Proximal minimization for Z
-function [z] = z_update(indices, q, K, Phi, b, rho, x, z, u)
+function [z] = z_update(indices, q, Phi, b, rho, x, z, u)
     % Constants 
     m = size(Phi,2);
 

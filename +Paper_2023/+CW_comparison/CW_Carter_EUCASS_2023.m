@@ -71,7 +71,7 @@ myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = N^2;                                        % AL parameter 
+rho = 1/N^2;                                      % AL parameter 
 
 for i = 1:iter
     [~, sol, ~, myProblem2] = myProblem.Solve(rho);

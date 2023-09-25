@@ -74,8 +74,8 @@ myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = 1/N;                                              % AL parameter 
-eps = [1e-6; 1e-5];                                     % Numerical tolerance
+rho = 1.34;                                              % AL parameter 
+eps = [1e-4; 1e-5];                                     % Numerical tolerance
 
 for i = 1:iter
     [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
@@ -88,7 +88,7 @@ p = reshape(sol(7:end), 3, []);
 dV = myProblem.u;
 
 % Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+[dV2, cost] = PVT_pruner(Phi, B, dV);
 
 %% Outcome 
 switch (myThruster.p)
