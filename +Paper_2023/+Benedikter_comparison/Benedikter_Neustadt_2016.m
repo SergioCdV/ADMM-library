@@ -203,19 +203,21 @@ hold off
 xlabel('$x$')
 ylabel('$z$')
 grid on;
-% xticklabels(strrep(xticklabels, '-', '$-$'));
-% yticklabels(strrep(yticklabels, '-', '$-$'));
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
 
 %% Absolute dynamics figure
-S = [s(:,1) -1.2 * ones(length(t),1)+s(:,2)];
+S = [s(:,1) -ones(length(t),1)+s(:,2)];
 
-% Rotation 
+% Rotation
+s0 = [-0.83; 0; 0];
+o21 = -[0; 0; 1];
 for i = 1:length(t)
-    o21 = [0; 1; 0];
-    o31 = -[cos(t(i)); 0; sin(t(i))];
+    o31 = -[cos(t(i)); sin(t(i)); 0];
     o11 = cross(o21, o31);
-    Q = [o11 o31];
-    S(i,1:2) = S(i,1:2) * Q([1 3], :).';
+    Q = [o11 o21 o31];
+    aux = Q * [S(i,1); 0; S(i,2)];
+    S(i,1:2) = aux([1 2]);
 end
 
 siz = repmat(100, 1, 1);
@@ -227,11 +229,11 @@ scatter(S(ti,1), S(ti,2), siz2, 'r', 'Marker', 'x');
 scatter(S(end,1), S(end,2), siz, 'b', 'Marker', 'o');
 legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 plot(S(:,1), S(:,2), 'b'); 
-fplot(@(t) cos(t), @(t) sin(t), 'k--');
-fplot(@(t) 1.2*cos(t), @(t) 1.2*sin(t), 'k');
+fplot(@(t) cos(t), @(t) sin(t), 'k');
+fplot(@(t) cos(t)/1.2, @(t) sin(t)/1.2, 'k--');
 hold off
-xlabel('$x$')
-ylabel('$y$')
+xlabel('$X$')
+ylabel('$Y$')
 grid on;
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
