@@ -59,7 +59,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         % Pre-factoring of constants
         p = repmat(n, 1, N);
         cum_part = cumsum(p);
-        pPhi = [Phi kron(eye(N),eye(n))];
+        pPhi = [Phi kron(eye(N),-eye(n))];
         Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
         Theta = pinv(Theta);
     
