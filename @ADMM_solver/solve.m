@@ -25,7 +25,7 @@ function [x, z, Output] = solve(obj, solver_type)
             zold = obj.B * obj.z(:,iter) - obj.C;
             xh = obj.alpha * obj.A * obj.x(:,iter+1) - (1-obj.alpha) * zold;
         else
-            zold = -obj.z(:,iter);
+            zold = obj.z(:,iter);
             xh = obj.alpha * obj.x(:,iter+1) - (1-obj.alpha) * zold;
         end
 

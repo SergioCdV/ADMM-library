@@ -10,12 +10,11 @@
                 obj.x(:,iter+1) = feval(obj.X_update, obj.x(:,iter), obj.z(:,iter), obj.u);
 
                 % Z update with relaxation
-                zold = -obj.z(:,iter);
-                xh = obj.alpha * obj.x(:,iter+1) - (1-obj.alpha) * zold;
+                xh = obj.alpha * obj.x(:,iter+1) - (1-obj.alpha) * obj.z(:,iter);
                 obj.z(:,iter+1) = feval(obj.Z_update, xh, obj.z(:,iter), obj.u);
 
                 % Compute the residuals and update the 
-                obj.u = obj.u + (xh - obj.z(:,iter+1));
+                obj.u = obj.u + xh - obj.z(:,iter+1);
                 
                 % Convergence analysis 
                 Output.objval(iter) = feval(obj.objective, obj.x(:,iter+1), obj.z(:,iter+1));

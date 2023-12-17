@@ -14,9 +14,9 @@ classdef ADMM_solver
         % User-defined 
         A;                          % Linear matrix of the constraint between x and z
         B;                          % Linear matrix of the constraint between x and z
-        C;                          % Linear term of the constraint between x and z
+        C;                          % Linear vector of the constraint between x and z
 
-        rho;                        % Augmented Lagrangian parameter 
+        rho = 0.1;                  % Augmented Lagrangian parameter 
 
         objective;                  % Objective function
         X_update;                   % Primary optimization problem solver
@@ -27,7 +27,9 @@ classdef ADMM_solver
         u;                          % Lagrange penalizer
 
         % Method hyperparameters
-        alpha = 0;                  % Relaxation coefficient
+        alpha = 1.6;                % Relaxation coefficient
+        sigma = 1e-6;               % Penalty parameter for QP
+
         MaxIter = 1e4;              % Maximum number of iterations
         AbsTol = 1e-9;              % Absolute tolerance
         RelTol = 1e-6;              % Relative tolerance
