@@ -91,21 +91,20 @@ classdef AQP_solver
         end
 
         % Main solver
-        function [x,z,Output] = solver(obj)
+        function [x, z, Output] = solver(obj)
+            % Solve the problem
+            [x, z, Output] = obj.quadratic_solve();
 
-            if ( isequal(obj.A,eye(size(obj.A,1))) && isequal(obj.B,-eye(size(obj.B,1))) && isequal(obj.C, zeros(size(obj.C,1),1)) )
-                solver_type = 0;
-            else
-                solver_type = 1;
-            end
-            
-            [x, z, Output] = solve(obj, solver_type);
+            % De-equilibration 
+            x = obj.D * x;
+            z = obj.D * z;
+            Output.objval = Output.objval / obj.c;
         end
     end
 
     methods (Access = private)
         % Initialization 
-        function [obj] = initADMM(obj)
+        function [obj] = initAQP(obj)
             % Dimensions of the problem
             obj.m = size(obj.A,1);
             obj.n = size(obj.A,2);
@@ -118,8 +117,10 @@ classdef AQP_solver
                 obj.z = zeros(obj.n, obj.MaxIter+1);
                 obj.u = zeros(obj.m, 1);
 
+                obj.rho = repmat(obj.rho, obj.n, 1);
+
                 % Matrix equilibration
-                [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = Ruiz_equilibration(obj.P, obj.q, obj.A, obj.eps_equil);
+                [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.Ruiz_equilibration(obj.P, obj.q, obj.A, obj.eps_equil);
             end
         end
 
@@ -128,6 +129,6 @@ classdef AQP_solver
     end
 
     methods (Static, Access = private)
-        [D, E] = Ruiz_equilibration(obj);   % Matrix equilibration
+        [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps);   % Matrix equilibration
     end
 end

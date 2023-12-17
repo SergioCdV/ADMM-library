@@ -29,17 +29,19 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
         M = [Pt At.'; At zeros(n)]; 
 
         delta = 1 ./ sqrt(max(abs(M), [], 1));
-
         Delta = diag(delta);
-        Pt = Delta * Pt; 
-        qt = Delta * qt;
-        At = Delta * At; 
+
+        D = Delta(1:n,1:n);
+        E = Delta(n+1:end, n+1:end);
+        Pt = D * Pt * D; 
+        qt = D * qt;
+        At = E * At * D; 
 
         gamma = 1 / max([mean(max(abs(Pt), [], 1)), norm(qt, 'inf')]);
         Pt = gamma * Pt;
         qt = gamma * qt;
-        S = Delta * S;
         c =  gamma *  c;
+        S = Delta * S;
 
         % Convergence analysis 
         if (norm(1-delta, 'inf') < eps)

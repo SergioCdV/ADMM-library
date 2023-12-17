@@ -19,35 +19,39 @@ function [x, z, Output] = quadratic_solve(obj)
     while (GoOn && iter <= obj.MaxIter)
         % Compute the rho matrix 
         Rho = diag(obj.rho);
-        index = feval(obj.check_cone(), obj.z(:,iter));
+        index = logical( feval(obj.CheckCone, obj.z(:,iter)) );
         Rho(index,index) = Rho(index,index) * 1e3;
 
         % X update
-        [xh, zh] = X_update(Rho, obj.x(:,iter), obj.z(:,iter), obj.u);
+        [xh, zh] = X_update(obj, Rho, obj.x(:,iter), obj.z(:,iter), obj.u);
         obj.x(:,iter+1) = obj.alpha * xh + (1 - obj.alpha) * obj.x(:,iter);
 
         % Z update with relaxation
-        zh = obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) + obj.u / rho;
-        obj.z(:,iter+1) = feval(obj.Z_update, xh, zh, obj.u);
+        zh = obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) + obj.u ./ diag(Rho);
+        obj.z(:,iter+1) = feval(obj.ConeProj, zh ./ diag(obj.E));
 
         % Compute the residuals
-        obj.u = obj.u + obj.rho * (obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) - obj.z(:,iter+1));
+        obj.u = obj.u + Rho * (obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) - obj.z(:,iter+1));
 
         % Convergence analysis 
-        Output.objval(iter) = feval(obj.objective, obj.x(:,iter+1), obj.z(:,iter+1));
-        Output.r_norm(iter) = norm(obj.A * obj.x(:,iter+1) - obj.z(:,iter+1), 'inf');
-        Output.s_norm(iter) = norm(obj.A.' * obj.u + obj.q, 'inf');
+        Output.objval(iter) = objective(obj, obj.x(:,iter+1));
+        Output.r_norm(iter) = norm(obj.At * obj.x(:,iter+1) - obj.z(:,iter+1), 'inf');
+        Output.s_norm(iter) = norm(obj.At.' * obj.u + obj.qt, 'inf');
     
-        a = max([norm(obj.A * obj.x(:,iter+1), 'inf'), norm(obj.z(:,iter+1), 'inf')]);
-        Output.eps_pri(iter) =  obj.AbsTol + obj.RelTol * a;
+        a = max([norm(obj.At * obj.x(:,iter+1), 'inf'), norm(obj.z(:,iter+1), 'inf')]);
+        Output.eps_pri(iter) = obj.AbsTol + obj.RelTol * a;
 
-        b = max([norm(obj.A.' * obj.u, "inf"), norm(obj.q,'inf')]);
+        b = max([norm(obj.At.' * obj.u, "inf"), norm(obj.qt,'inf')]);
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
-        a = Output.r_norm(iter) / a;          % Primal ratio
-        b = Output.eps_dual(iter) / b;        % Dual ratio
-        obj.rho = obj.rho * sqrt(a / b);      % Penalty factors
+        if (a ~= 0)
+            a = Output.r_norm(iter) / a;              % Primal ratio
+            if (b ~= 0)
+                b = Output.eps_dual(iter) / b;        % Dual ratio
+                obj.rho = obj.rho * sqrt(a / b);      % Penalty factors
+            end
+        end
         
         if (obj.QUIET)
             if (iter == 1)
@@ -86,10 +90,15 @@ end
 % Update on the splitting X variables (QP problem) 
 function [xt, zt] = X_update(obj, Rho, x, z, y)
     % KKT matrix 
-    A = obj.P + obj.sigma * eye(size(P)) + Rho * (obj.A.' * obj.A);
-    b = obj.sigma * x - obj.q + obj.A.' * (Rho * z - y);
+    A = obj.Pt + obj.sigma * eye(size(obj.Pt)) + Rho * (obj.At.' * obj.At);
+    b = obj.sigma * x - obj.qt + obj.At.' * (Rho * z - y);
 
     % Final variables
     xt = A \ b; 
-    zt = A * xt;
+    zt = obj.At * xt;
+end
+
+% Objective function 
+function [obj] = objective(obj, x)
+    obj = 0.5 * x.' * obj.Pt * x + obj.qt.' * x; 
 end
