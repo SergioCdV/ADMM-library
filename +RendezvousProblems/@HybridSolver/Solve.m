@@ -33,7 +33,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = (M * STM(:,1+m*(i-1):m*i)^(-1)) * B(:,1+n*(i-1):n*i);
+        Phi(:,1+n*(i-1):n*i) = M * ( STM(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
     end
     A = [(1 + rho) * eye(size(Phi,2)) Phi.'; Phi zeros(size(Phi,1))];
     A = pinv(A);
@@ -58,10 +58,11 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     % Problem
     Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
 
-    if (~exist('alpha', 'var'))
-        alpha = 1;
+    if (exist('alpha', 'var'))
+        Problem.alpha = alpha;
+    else
+        Problem.alpha = 0;
     end
-    Problem.alpha = alpha;
     Problem.QUIET = false;
 
     % Optimization
@@ -70,8 +71,8 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     obj.SolveTime = toc;
 
     % Output 
-    dV2 = reshape(x(:,end), n, []);   % Control sequence
-    dV = reshape(z(:,end), n, []);  % Control sequence
+    dV2 = reshape(x(:,end), n, []);      % Control sequence
+    dV = reshape(z(:,end), n, []);       % Control sequence
     u = [dV2; dV]; 
 
     obj.Cost = sum( abs(dV), 1 );

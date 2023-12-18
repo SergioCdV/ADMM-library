@@ -33,7 +33,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = (M * STM(:,1+m*(i-1):m*i)^(-1)) * B(:,1+n*(i-1):n*i);
+        Phi(:,1+n*(i-1):n*i) = M * ( STM(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
     end
 
     % Compute the initial missvector
@@ -56,12 +56,11 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     c = zeros(n * N,1);
 
     % Problem
-    Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
+    Problem = Solvers.ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
 
-    if (~exist('alpha', 'var'))
-        alpha = 1;
+    if (exist('alpha', 'var'))
+        Problem.alpha = alpha;
     end
-    Problem.alpha = alpha;
     Problem.QUIET = false;
 
     % Optimization
@@ -72,16 +71,6 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     % Output 
     dV = reshape(x(:,end), n, []);  % Control sequence
     u = dV; 
-
-%     k = 1;
-%     for i = 1:size(x,2)
-%         dv = reshape(x(:,i), n, []);
-%         dVs(:,k) = sqrt(dot(dv,dv,1));
-%         k = k+1;
-%     end
-% 
-%     figure 
-%     stem3(1:size(x,2),t,dVs, 'LineStyle','none');
 
     switch (obj.Thruster.p)
         case 'L2'

@@ -1,7 +1,7 @@
 %% Optimal rendezvous by ADMM %% 
 % Sergio Cuevas del Valle
 % Date: 29/08/23
-% File: PrimalSolver.m 
+% File: CarterSolver.m 
 % Issue: 0 
 % Validated: 
 

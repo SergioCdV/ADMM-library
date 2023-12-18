@@ -18,22 +18,15 @@ function [x, z, Output] = solve(obj, solver_type)
     % Solver
     while (GoOn && iter <= obj.MaxIter)
         % X update
-        obj.x(:,iter+1) = feval(obj.X_update, obj.x(:,iter), obj.z(:,iter), obj.u);
+        xh = feval(obj.X_update, obj.x(:,iter), obj.z(:,iter), obj.u);
+        obj.x(:,iter+1) = obj.alpha * xh + (1-obj.alpha) * obj.x(:,iter);
 
         % Z update with relaxation
-        if (solver_type)
-            zold = obj.B * obj.z(:,iter) - obj.C;
-            xh = obj.alpha * obj.A * obj.x(:,iter+1) - (1-obj.alpha) * zold;
-        else
-            zold = obj.z(:,iter);
-            xh = obj.alpha * obj.x(:,iter+1) - (1-obj.alpha) * zold;
-        end
-
-        obj.z(:,iter+1) = feval(obj.Z_update, xh, obj.z(:,iter), obj.u);
+        obj.z(:,iter+1) = feval(obj.Z_update, obj.x(:,iter+1), obj.z(:,iter), obj.u);
 
         % Compute the residuals
         if (solver_type)
-            obj.u = obj.u + (xh + obj.B * obj.z(:,iter+1) - obj.C);
+            obj.u = obj.u + (obj.A * xh + obj.B * obj.z(:,iter+1) - obj.C);
 
             % Convergence analysis 
             Output.objval(iter) = feval(obj.objective, obj.x(:,iter+1), obj.z(:,iter+1));
