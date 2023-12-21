@@ -18,15 +18,16 @@ function [x, z, Output] = solve(obj, solver_type)
     % Solver
     while (GoOn && iter <= obj.MaxIter)
         % X update
-        xh = feval(obj.X_update, obj.x(:,iter), obj.z(:,iter), obj.u);
-        obj.x(:,iter+1) = obj.alpha * xh + (1-obj.alpha) * obj.x(:,iter);
+        obj.x(:,iter+1) = feval(obj.X_update, obj.x(:,iter), obj.z(:,iter), obj.u);
 
-        % Z update with relaxation
-        obj.z(:,iter+1) = feval(obj.Z_update, obj.x(:,iter+1), obj.z(:,iter), obj.u);
-
-        % Compute the residuals
         if (solver_type)
-            obj.u = obj.u + (obj.A * xh + obj.B * obj.z(:,iter+1) - obj.C);
+           xh = obj.alpha * obj.A * obj.x(:,iter+1) + (1-obj.alpha) * (obj.B * obj.z(:,iter) - obj.c);
+
+            % Z update with relaxation
+            obj.z(:,iter+1) = feval(obj.Z_update, xh, obj.z(:,iter), obj.u);
+            
+            % Compute the residuals
+            obj.u = obj.u + (xh + obj.B * obj.z(:,iter+1) - obj.C);
 
             % Convergence analysis 
             Output.objval(iter) = feval(obj.objective, obj.x(:,iter+1), obj.z(:,iter+1));
@@ -36,6 +37,11 @@ function [x, z, Output] = solve(obj, solver_type)
             Output.eps_pri(iter) =  sqrt(obj.n) * obj.AbsTol + obj.RelTol * max([norm(obj.C) norm(obj.A * obj.x(:,iter+1)), norm(obj.B * obj.z(:,iter+1))]);
             Output.eps_dual(iter) = sqrt(obj.m) * obj.AbsTol + obj.RelTol * norm(obj.rho * obj.A.' * obj.u);
         else
+            xh = obj.alpha * obj.x(:,iter+1) + (1-obj.alpha) * obj.z(:,iter);
+
+            % Z update with relaxation
+            obj.z(:,iter+1) = feval(obj.Z_update, xh, obj.z(:,iter), obj.u);
+
             obj.u = obj.u + (xh - obj.z(:,iter+1));
 
             Output.objval(iter) = feval(obj.objective, obj.x(:,iter+1), obj.z(:,iter+1));
