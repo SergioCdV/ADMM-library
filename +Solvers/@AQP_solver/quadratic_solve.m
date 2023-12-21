@@ -31,17 +31,17 @@ function [x, z, Output] = quadratic_solve(obj)
         obj.z(:,iter+1) = feval(obj.ConeProj, zh ./ diag(obj.E));
 
         % Compute the residuals
-        obj.u = obj.u + Rho * (obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) - obj.z(:,iter+1));
+        obj.u = Rho * (zh - obj.z(:,iter+1));
 
         % Convergence analysis 
         Output.objval(iter) = objective(obj, obj.x(:,iter+1));
         Output.r_norm(iter) = norm(obj.At * obj.x(:,iter+1) - obj.z(:,iter+1), 'inf');
-        Output.s_norm(iter) = norm(obj.At.' * obj.u + obj.qt, 'inf');
+        Output.s_norm(iter) = norm(obj.Pt * obj.x(:,iter+1) + obj.At.' * obj.u + obj.qt, 'inf');
     
         a = max([norm(obj.At * obj.x(:,iter+1), 'inf'), norm(obj.z(:,iter+1), 'inf')]);
         Output.eps_pri(iter) = obj.AbsTol + obj.RelTol * a;
 
-        b = max([norm(obj.At.' * obj.u, "inf"), norm(obj.qt,'inf')]);
+        b = max([norm(obj.Pt * obj.x(:,iter+1), "inf"), norm(obj.At.' * obj.u, "inf"), norm(obj.qt,'inf')]);
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
@@ -90,7 +90,7 @@ end
 % Update on the splitting X variables (QP problem) 
 function [xt, zt] = X_update(obj, Rho, x, z, y)
     % KKT matrix 
-    A = obj.Pt + obj.sigma * eye(size(obj.Pt)) + Rho * (obj.At.' * obj.At);
+    A = obj.Pt + obj.sigma * eye(size(obj.Pt)) + (obj.At.' * Rho * obj.At);
     b = obj.sigma * x - obj.qt + obj.At.' * (Rho * z - y);
 
     % Final variables

@@ -30,6 +30,7 @@ classdef AQP_solver
         % Method hyperparameters
         rho = 0.1;                  % Augmented Lagrangian parameter 
         alpha = 1.6;                % Relaxation coefficient
+        sigma = 1e-6;               % Relaxation coefficient
 
         MaxIter = 1e4;              % Maximum number of iterations
         AbsTol = 1e-9;              % Absolute tolerance
@@ -96,7 +97,7 @@ classdef AQP_solver
 
             % De-equilibration 
             x = obj.D * x;
-            z = obj.D * z;
+            z = obj.E * z;
             Output.objval = Output.objval / obj.c;
         end
     end
@@ -113,10 +114,10 @@ classdef AQP_solver
                 error('No valid matrix dimensions were introduced.');
             else
                 obj.x = zeros(obj.n, obj.MaxIter+1);
-                obj.z = zeros(obj.n, obj.MaxIter+1);
+                obj.z = zeros(obj.m, obj.MaxIter+1);
                 obj.u = zeros(obj.m, 1);
 
-                obj.rho = repmat(obj.rho, obj.n, 1);
+                obj.rho = repmat(obj.rho, obj.m, 1);
 
                 % Matrix equilibration
                 [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.Ruiz_equilibration(obj.P, obj.q, obj.A, obj.eps_equil);
