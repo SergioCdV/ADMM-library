@@ -11,9 +11,10 @@
 
 function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
     % Initilization 
-    n = size(P);    % Dimension of the scaling matrix
-    c = 1;          % Cost scaling term
-    S = eye(2*n);   % Equilibration matrix 
+    n = size(P,1);    % Dimension of the scaling matrix
+    N = size(A,1);    % Dimension of the equality matrix
+    c = 1;            % Cost scaling term
+    S = eye(n + N);   % Equilibration matrix 
 
     Pt = P;         % Equilibrated quadratic penalty matrix 
     qt = q;         % Equilibrated cost function
@@ -26,13 +27,13 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
 
     while (GoOn && iter < maxIter)
         % Form the M matrix 
-        M = [Pt At.'; At zeros(n)]; 
+        M = [Pt At.'; At zeros(N)]; 
 
         delta = 1 ./ sqrt(max(abs(M), [], 1));
         Delta = diag(delta);
 
-        D = Delta(1:n,1:n);
-        E = Delta(n+1:end, n+1:end);
+        D = Delta(1:size(P,1),1:size(P,1));
+        E = Delta(size(P,1)+1:end,size(P,1)+1:end);
         Pt = D * Pt * D; 
         qt = D * qt;
         At = E * At * D; 
@@ -41,7 +42,7 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
         Pt = gamma * Pt;
         qt = gamma * qt;
         c =  gamma *  c;
-        S = Delta * S;
+        S =  Delta * S;
 
         % Convergence analysis 
         if (norm(1-delta, 'inf') < eps)
@@ -52,6 +53,6 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
     end
 
     % Final scaling matrices
-    D = S(1:n,1:n);
-    E = S(n+1:end, n+1:end);
+    D = S(1:size(P,1),1:size(P,1));
+    E = S(size(P,1)+1:end,size(P,1)+1:end);
 end
