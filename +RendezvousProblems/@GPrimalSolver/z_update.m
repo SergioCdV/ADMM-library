@@ -1,35 +1,24 @@
 %% Optimal rendezvous by ADMM %% 
 % Sergio Cuevas del Valle
 % Date: 28/08/23
-% File: z_update.m 
+% File: x_update.m 
 % Issue: 0 
 % Validated: 
 
-%% Z update %% 
-% ADMM problem function to update the Z sequence via proximal minimization
+%% X update %% 
+% ADMM problem function to update the X sequence via proximal minimization
 
 % Inputs:  
-% Outputs: - vector z, the update impulsive sequence
+% Outputs: - vector x, the update impulsive sequence
 
-% Proximal minimization for Z
-function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
-    % Impulses update
-    start_ind = 1;
-    for i = 1:length(indices)
-        sel = start_ind:indices(i);
+function [z] = z_update(indices, p, q, umin, umax, K, pInvA, Atb, rho, x, z, u) 
+   z = pInvA * (x+u) + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
 
-        % Fuel consumption minimization
-        switch (p)
-            case 'L1'
-                z(sel) = l1_shrinkage(x(sel) + u(sel), 1/rho);
-            case 'L2'
-                z(sel) = l2_shrinkage(x(sel) + u(sel), 1/rho);
-            case 'Linfty'
-                z(sel) = lifty_shrinkage(x(sel) + u(sel), 1/rho);
-        end
-
-        % Maximum control ball projection
-        if (umax ~= Inf)
+   % Maximum control ball projection
+    if (umax ~= Inf)
+        start_ind = 1;
+        for i = 1:length(indices)
+            sel = start_ind:indices(i);
             switch (q)
                 case 'L1'
                     z(sel) = l1_bproj(z(sel), umax);
@@ -38,14 +27,13 @@ function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
                 case 'Linfty'
                     z(sel) = lifty_bproj(z(sel), umax);
             end
+            start_ind = indices(i) + 1;
         end
-                   
-        start_ind = indices(i) + 1;
     end
 
     % Cardinality constraint
     if (K ~= Inf)
-        dV = reshape(x, indices(1), []);
+        dV = reshape(z, indices(1), []);
         switch (p)
             case 'L1'
                 cost = sum( abs(dV), 1);
@@ -59,30 +47,12 @@ function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
         
         index = pos(K+1:end);
         for i = 1:length(index)
-            x(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
+            z(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
         end
     end
 end
 
 %% Auxiliary functions
-% Proximal minimization of the L1 norm
-function z = l1_shrinkage(x, kappa)
-    z = x;
-    for i = 1:length(x)
-        z(i) = max(0, x(i)-kappa) - max(0, -x(i)-kappa);
-    end
-end
-
-% Proximal minimization of the L2 norm
-function z = l2_shrinkage(x, kappa)
-    z = max(0, 1 - kappa/norm(x)) * x;
-end
-
-% Proximal minimization of the Lifty norm
-function z = lifty_shrinkage(x, kappa)
-    z = x - kappa * l1_bproj(x/kappa,1);
-end
-
 % Projection onto the L1 ball 
 function [x] = l1_bproj(x, a)
     if (sum(abs(x)) > a)

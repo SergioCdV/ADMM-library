@@ -93,9 +93,9 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
+myProblem = RendezvousProblems.GPrimalSolver(myMission, myThruster);
 
-rho = 1;    % AL parameter 
+rho = N;    % AL parameter 
 
 iter = 1; 
 time = zeros(1,iter);
