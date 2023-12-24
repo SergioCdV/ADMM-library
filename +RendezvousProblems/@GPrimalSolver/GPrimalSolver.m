@@ -34,8 +34,8 @@ classdef GPrimalSolver < RendezvousProblems.SolverRendezvous
     % ADMM functions
     methods (Static)
         [p] = objective(p, cum_part, x);
-        [x] = x_update(indices, p, rho, x, z, u);
-        [z] = z_update(indices, p, q, umin, umax, K, pInvA, Atb, rho, x, z, u);
+        [z] = z_update(indices, p, rho, x, z, u);
+        [x] = x_update(indices, p, q, umin, umax, K, pInvA, Atb, rho, x, z, u);
     end
 
 end

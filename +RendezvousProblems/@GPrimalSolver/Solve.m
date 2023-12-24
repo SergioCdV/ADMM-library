@@ -47,8 +47,8 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
 
     % Create the functions to be solved 
     Obj = @(x,z)(obj.objective(obj.Thruster.p, cum_part, x));
-    X_update = @(x,z,u)(obj.x_update(cum_part, obj.Thruster.p, rho, x, z, u));
-    Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.p, obj.Thruster.q, obj.Thruster.umin, obj.Thruster.umax, obj.Mission.N, pInvA, Atb, rho, x, z, u));
+    X_update = @(x,z,u)(obj.x_update(cum_part, obj.Thruster.p, obj.Thruster.q, obj.Thruster.umin, obj.Thruster.umax, obj.Mission.N, pInvA, Atb, rho, x, z, u));
+    Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.p, rho, x, z, u));
 
     % ADMM consensus constraint definition 
     A = eye(n * N);

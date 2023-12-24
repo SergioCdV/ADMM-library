@@ -11,40 +11,80 @@
 % Inputs:  
 % Outputs: - vector x, the update impulsive sequence
 
-% Proximal minimization for Z
-function [x] = x_update(indices, p, rho, x, z, u)
-    % Impulses update
-    start_ind = 1;
-    for i = 1:length(indices)
-        sel = start_ind:indices(i);
+function [x] = x_update(indices, p, q, umin, umax, K, pInvA, Atb, rho, x, z, u) 
+   x = pInvA * (z-u) + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
 
-        % Fuel consumption minimization
+   % Maximum control ball projection
+    if (umax ~= Inf)
+        start_ind = 1;
+        for i = 1:length(indices)
+            sel = start_ind:indices(i);
+            switch (q)
+                case 'L1'
+                    x(sel) = l1_bproj(x(sel), umax);
+                case 'L2'
+                    x(sel) = l2_bproj(x(sel), umax);
+                case 'Linfty'
+                    x(sel) = lifty_bproj(x(sel), umax);
+            end
+            start_ind = indices(i) + 1;
+        end
+    end
+
+    % Cardinality constraint
+    if (K ~= Inf)
+        dV = reshape(x, indices(1), []);
         switch (p)
             case 'L1'
-                x(sel) = l1_shrinkage(z(sel) - u(sel), 1/rho);
+                cost = sum( abs(dV), 1);
             case 'L2'
-                x(sel) = l2_shrinkage(z(sel) - u(sel), 1/rho);
+                cost = sqrt( dot(dV, dV, 1) );
             case 'Linfty'
-                x(sel) = lifty_shrinkage(z(sel) - u(sel), 1/rho);
+                cost = max(abs(dV), [], 1);
+        end
+    
+        [~, pos] = sort( cost, 'descend');
+        
+        index = pos(K+1:end);
+        for i = 1:length(index)
+            x(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
         end
     end
 end
 
 %% Auxiliary functions
-% Proximal minimization of the L1 norm
-function z = l1_shrinkage(x, kappa)
-    z = x;
-    for i = 1:length(x)
-        z(i) = max(0, x(i)-kappa) - max(0, -x(i)-kappa);
+% Projection onto the L1 ball 
+function [x] = l1_bproj(x, a)
+    if (sum(abs(x)) > a)
+        u = sort(x,'descend');
+        K = 1:length(x); 
+
+        index = false * ones(1,length(K));
+        for i = 1:length(K)
+            index(i) = sum(u(1:K(i)))/K(i) < u(K(i));
+        end
+        index(1) = 1;
+        u = u(logical(index));
+        rho = sum(u-a)/length(u);
+        x = max(x-rho,0);
     end
 end
 
-% Proximal minimization of the L2 norm
-function z = l2_shrinkage(x, kappa)
-    z = max(0, 1 - kappa/norm(x)) * x;
+% Projection onto the L2 ball 
+function [x] = l2_bproj(x, a)
+    Norm = norm(x);
+    if (Norm > a)
+       x = a * x / Norm;
+    end
 end
 
-% Proximal minimization of the Lifty norm
-function z = lifty_shrinkage(x, kappa)
-    z = x - kappa * l1_bproj(x/kappa,1);
+% Projection onto the Lifty ball 
+function [x] = lifty_bproj(x, a)
+    for i = 1:length(x)
+        if (x(i) < -a)
+            x(i) = -a;
+        elseif (x(i) > a)
+            x(i) = a;
+        end
+    end
 end
