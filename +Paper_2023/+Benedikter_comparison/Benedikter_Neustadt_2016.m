@@ -91,7 +91,7 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.QuadNeustadtSolver(myMission, myThruster);
+myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);

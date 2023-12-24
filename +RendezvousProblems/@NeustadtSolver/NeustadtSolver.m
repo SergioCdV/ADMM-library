@@ -35,7 +35,7 @@ classdef NeustadtSolver < RendezvousProblems.SolverRendezvous
     methods (Static)
         [p] = objective(c, x);
         [x] = x_update(m, Phi, c, rho, x, z, u);
-        [z] = z_update(indices, q, Phi, b, rho, x, z, u);
+        [z] = z_update(indices, q, b, rho, x, z, u);
     end
 
 end
