@@ -20,7 +20,7 @@ function [x, z, Output] = quadratic_solve(obj)
         % Compute the rho matrix 
         Rho = diag(obj.rho);
         index = logical( feval(obj.CheckCone, obj.z(:,iter)) );
-        Rho(index,index) = Rho(index,index) * 1e3;
+%         Rho(index,index) = Rho(index,index) * 1e3;
 
         % X update
         [xh, zh] = X_update(obj, Rho, obj.x(:,iter), obj.z(:,iter), obj.u);
@@ -45,13 +45,13 @@ function [x, z, Output] = quadratic_solve(obj)
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
-        if (a ~= 0)
-            a = Output.r_norm(iter) / a;              % Primal ratio
-            if (b ~= 0)
-                b = Output.eps_dual(iter) / b;        % Dual ratio
-                obj.rho = obj.rho * sqrt(a / b);      % Penalty factors
-            end
-        end
+%         if (a ~= 0)
+%             a = Output.r_norm(iter) / a;              % Primal ratio
+%             if (b ~= 0)
+%                 b = Output.s_norm(iter) / b;        % Dual ratio
+%                 obj.rho = obj.rho * sqrt(a / b);      % Penalty factors
+%             end
+%         end
         
         if (obj.QUIET)
             if (iter == 1)

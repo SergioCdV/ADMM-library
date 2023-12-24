@@ -31,7 +31,7 @@ classdef ADMM_solver
 
         MaxIter = 1e4;              % Maximum number of iterations
         AbsTol = 1e-9;              % Absolute tolerance
-        RelTol = 1e-6;              % Relative tolerance
+        RelTol = 1e-9;              % Relative tolerance
 
         QUIET = true;               % Output results flag
 

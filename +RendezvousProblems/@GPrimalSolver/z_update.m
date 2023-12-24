@@ -12,7 +12,8 @@
 % Outputs: - vector x, the update impulsive sequence
 
 function [z] = z_update(indices, p, q, umin, umax, K, pInvA, Atb, rho, x, z, u) 
-   z = pInvA * (x+u) + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
+   z = x + u;
+   z = pInvA * z + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
 
    % Maximum control ball projection
     if (umax ~= Inf)

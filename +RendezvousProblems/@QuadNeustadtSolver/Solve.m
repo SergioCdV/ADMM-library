@@ -54,27 +54,19 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     GoOn = true;
 
     while (iter < maxIter && GoOn && N > 1)
-        v = [-b; -zeros(n * N,1)];
+        v = -b;
     
         % Pre-factoring of constants
         p = repmat(n, 1, N);
         cum_part = cumsum(p);
-        pPhi = [Phi kron(eye(N),-eye(n))];
-        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
-        Theta = pinv(Theta);
+        pPhi = [-b.'; Phi];
     
         % Create the functions to be solved 
-        Obj = @(x,z)(obj.objective(v, z));
-        X_update = @(x,z,u)(obj.x_update(m, Theta, v, rho, x, z, u));
-        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.q, Phi, -b, rho, x, z, u));
-    
-        % ADMM consensus constraint definition 
-        A = eye(m + n * N);
-        B = -eye(m + n * N);        
-        c = zeros(m + n * N,1);
-    
+        CC = @(z)(obj.ConeCheck(cum_part, obj.Thruster.q, -b, z));
+        CP = @(z)(obj.ConeProj(cum_part, obj.Thruster.q, b, z));
+        
         % Problem
-        Problem = Solvers.ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
+        Problem = Solvers.AQP_solver(CC, CP, zeros(size(Phi,2), size(Phi,2)), -b, pPhi);
     
         if (~exist('alpha', 'var'))
             alpha = 1;
