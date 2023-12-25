@@ -13,12 +13,12 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
     % Initilization 
     n = size(P,1);    % Dimension of the scaling matrix
     N = size(A,1);    % Dimension of the equality matrix
-    c = 1;            % Cost scaling term
     S = eye(n + N);   % Equilibration matrix 
+    c = 1;            % Cost scaling term
 
-    Pt = P;         % Equilibrated quadratic penalty matrix 
-    qt = q;         % Equilibrated cost function
-    At = A;         % Equilibrated equality constraint
+    Pt = P;           % Equilibrated quadratic penalty matrix 
+    qt = q;           % Equilibrated cost function
+    At = A;           % Equilibrated equality constraint
 
     % Ruiz equilibration
     iter = 1; 
@@ -27,32 +27,42 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
 
     while (GoOn && iter < maxIter)
         % Form the M matrix 
-        M = [Pt At.'; At zeros(N)]; 
+        M1 = [Pt; At];
 
-        delta = 1 ./ sqrt(max(abs(M), [], 1));
-        Delta = diag(delta);
+        delta = [max(abs(M1), [], 1) max(abs(At), [], 2).'];
+        delta(delta < 1e-5) = ones(1, length(delta(delta < 1e-5)));
+        Delta = diag( 1 ./ sqrt(delta) );
 
-        D = Delta(1:size(P,1),1:size(P,1));
-        E = Delta(size(P,1)+1:end,size(P,1)+1:end);
-        Pt = D * Pt * D; 
+        S = Delta * S;
+        D = Delta(1:n, 1:n);
+        E = Delta(n+1:end, n+1:end);
+
+        % Ruiz equilibration
+        Pt = D * (Pt * D); 
+        At = E * (At * D); 
         qt = D * qt;
-        At = E * At * D; 
 
-        gamma = 1 / max([mean(max(abs(Pt), [], 1)), norm(qt, 'inf')]);
+        % Cost equilibration step
+        gamma = max([mean(max(abs(Pt), [], 1)), norm(qt, 'inf')]);
+        if (gamma < 1e-5)
+            gamma = 1;
+        else
+            gamma = 1 / gamma;
+        end
+
         Pt = gamma * Pt;
         qt = gamma * qt;
-        c =  gamma *  c;
-        S =  Delta * S;
+        c =  gamma * c;
 
         % Convergence analysis 
         if (norm(1-delta, 'inf') < eps)
             GoOn = false;
-        else
-            iter = iter + 1;
         end
+        
+        iter = iter + 1;
     end
 
     % Final scaling matrices
-    D = S(1:size(P,1),1:size(P,1));
-    E = S(size(P,1)+1:end,size(P,1)+1:end);
+    D = S(1:n, 1:n);
+    E = S(n+1:end, n+1:end);
 end

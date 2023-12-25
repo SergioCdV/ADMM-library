@@ -32,6 +32,9 @@ classdef AQP_solver
         alpha = 1.6;                % Relaxation coefficient
         sigma = 1e-6;               % Relaxation coefficient
 
+        scale_min = 0.2;            % Lower bound to activate the update on the rho parameter 
+        scale_max = 5;              % Upper bound to activate the update on the rho parameter 
+        
         MaxIter = 1e4;              % Maximum number of iterations
         AbsTol = 1e-9;              % Absolute tolerance
         RelTol = 1e-6;              % Relative tolerance
@@ -39,7 +42,7 @@ classdef AQP_solver
         QUIET = true;               % Output results flag
 
         % Scaling (matrix equilibration)
-        eps_equil = 1e-3;           % Equilibration tolerance
+        eps_equil = 1e-4;           % Equilibration tolerance
         c;                          % Cost function scaling
         D;                          % Scaling sub-matrix
         E;                          % Scaling sub-matrix

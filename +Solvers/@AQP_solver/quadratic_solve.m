@@ -19,39 +19,41 @@ function [x, z, Output] = quadratic_solve(obj)
     while (GoOn && iter <= obj.MaxIter)
         % Compute the rho matrix 
         Rho = diag(obj.rho);
-        index = logical( feval(obj.CheckCone, obj.z(:,iter)) );
-%         Rho(index,index) = Rho(index,index) * 1e3;
 
         % X update
         [xh, zh] = X_update(obj, Rho, obj.x(:,iter), obj.z(:,iter), obj.u);
         obj.x(:,iter+1) = obj.alpha * xh + (1 - obj.alpha) * obj.x(:,iter);
 
         % Z update with relaxation
-        zh = obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) + obj.u ./ diag(Rho);
+        zh = obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) + obj.u ./ obj.rho;
         obj.z(:,iter+1) = feval(obj.ConeProj, zh ./ diag(obj.E));
 
         % Compute the residuals
         obj.u = Rho * (zh - obj.z(:,iter+1));
 
         % Convergence analysis 
-        Output.objval(iter) = objective(obj, obj.x(:,iter+1));
-        Output.r_norm(iter) = norm(obj.At * obj.x(:,iter+1) - obj.z(:,iter+1), 'inf');
-        Output.s_norm(iter) = norm(obj.Pt * obj.x(:,iter+1) + obj.At.' * obj.u + obj.qt, 'inf');
+        Output.objval(iter) = objective(obj, obj.x(:,iter));
+        Output.r_norm(iter) = norm(obj.At * obj.x(:,iter) - obj.z(:,iter), 'inf');
+        Output.s_norm(iter) = norm(obj.Pt * obj.x(:,iter) + obj.At.' * obj.u + obj.qt, 'inf');
     
-        a = max([norm(obj.At * obj.x(:,iter+1), 'inf'), norm(obj.z(:,iter+1), 'inf')]);
+        a = max([norm(obj.At * obj.x(:,iter), 'inf'), norm(obj.z(:,iter), 'inf')]);
         Output.eps_pri(iter) = obj.AbsTol + obj.RelTol * a;
 
-        b = max([norm(obj.Pt * obj.x(:,iter+1), "inf"), norm(obj.At.' * obj.u, "inf"), norm(obj.qt,'inf')]);
+        b = max([norm(obj.Pt * obj.x(:,iter), "inf"), norm(obj.At.' * obj.u, "inf"), norm(obj.qt,'inf')]);
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
-%         if (a ~= 0)
-%             a = Output.r_norm(iter) / a;              % Primal ratio
-%             if (b ~= 0)
-%                 b = Output.s_norm(iter) / b;        % Dual ratio
-%                 obj.rho = obj.rho * sqrt(a / b);      % Penalty factors
-%             end
-%         end
+        if (a ~= 0)
+            a = Output.r_norm(iter) / a;        % Primal ratio
+            if (b ~= 0)
+                b = Output.s_norm(iter) / b;    % Dual ratio
+                scale = sqrt(a / b);            % Penalty factors
+
+                if (scale <= obj.scale_min || scale >= obj.scale_max)
+                    obj.rho = scale * obj.rho;
+                end
+            end
+        end
         
         if (obj.QUIET)
             if (iter == 1)

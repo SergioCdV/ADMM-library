@@ -9,11 +9,12 @@
 % Solve for the minimum of 0.5 * x.' * P * x, Ax \in C % 
 
 %% Input data
-P = 1e-3 * eye(6);  
-P = 0.5 * (P + P.') + 1e-2 * eye(6); 
-q = rand(6,1);
-
-A = rand(3,6);
+M = 20;
+N = 10 * M;
+P = rand(M,M);
+P = P * P.' + 1e-3 * eye(M);  
+q = rand(M,1);
+A = rand(N,M);
 
 %% Solve the problem 
 Solver = Solvers.AQP_solver(@(x)myConeCheck(x), @(x)myConeProjec(x), P, q, A);
