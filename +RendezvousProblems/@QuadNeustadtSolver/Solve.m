@@ -53,26 +53,28 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     iter = 1;
     GoOn = true;
 
-    while (iter < maxIter && GoOn && N > 1)
-        v = -b;
-    
+    while (iter < maxIter && GoOn && N > 1)    
         % Pre-factoring of constants
         p = repmat(n, 1, N);
         cum_part = cumsum(p);
-        pPhi = [-b.'; Phi];
+        pPhi = [+b.'; Phi];
     
         % Create the functions to be solved 
         CC = @(z)(obj.ConeCheck(cum_part, obj.Thruster.q, -b, z));
         CP = @(z)(obj.ConeProj(cum_part, obj.Thruster.q, b, z));
         
         % Problem
-        Problem = Solvers.AQP_solver(CC, CP, zeros(size(Phi,2), size(Phi,2)), -b, pPhi);
+        Problem = Solvers.AQP_solver(CC, CP, zeros(size(Phi,2), size(Phi,2)), b, pPhi);
     
-        if (~exist('alpha', 'var'))
-            alpha = 1;
+        if (exist('alpha', 'var'))
+            Problem.alpha = alpha;
         end
-        Problem.alpha = alpha;
-        Problem.QUIET = false;
+
+        if (exist('rho', 'var'))
+            Problem.rho = rho;
+        end
+        
+        Problem.QUIET = true;
 
         % Solve the problem
         tic
@@ -111,7 +113,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     u = [lambda; M * lambda];
 
     % Computation of the control law
-    p = reshape(z(m+1:end,end), n, []);
+%     p = reshape(z(m+1:end,end), n, []);
     N = size(p,2);
 
     switch (obj.Thruster.q)
@@ -167,15 +169,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     end
 
     % Output
-    switch (obj.Thruster.p)
-        case 'L2'
-            obj.Cost = sqrt( dot(dv, dv, 1) );
-        case 'L1'
-            obj.Cost = sum( abs(dv), 1 );
-        case 'Linfty'
-            obj.Cost = max( abs(dv), [], 1 );
-    end
-
 %     k = 1;
 %     for i = 1:1000:size(z,2)
 %         dv = reshape(z(m+1:end,i), n, []);
@@ -190,9 +183,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     for i = 1:length(t_pruned)
         dV(:, t_pruned(i) == t) = dv(:,i);
     end
-
-    obj.Cost = dot(b,lambda);
    
+    obj.Cost = -dot(b,lambda);                  % Problem's cost
     obj.Report = Output;                        % Optimization report
     obj.e(:,1) = b - M.' * reshape(dV, [], 1);  % Final missvector   
     obj.u = dV;                                 % Final rendezvous impulsive sequence

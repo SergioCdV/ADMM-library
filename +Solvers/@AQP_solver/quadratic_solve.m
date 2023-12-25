@@ -43,17 +43,17 @@ function [x, z, Output] = quadratic_solve(obj)
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
-        if (a ~= 0)
-            a = Output.r_norm(iter) / a;        % Primal ratio
-            if (b ~= 0)
-                b = Output.s_norm(iter) / b;    % Dual ratio
-                scale = sqrt(a / b);            % Penalty factors
-
-                if (scale <= obj.scale_min || scale >= obj.scale_max)
-                    obj.rho = scale * obj.rho;
-                end
-            end
-        end
+%         if (a ~= 0)
+%             a = Output.r_norm(iter) / a;        % Primal ratio
+%             if (b ~= 0)
+%                 b = Output.s_norm(iter) / b;    % Dual ratio
+%                 scale = sqrt(a / b);            % Penalty factors
+% 
+%                 if (scale <= obj.scale_min || scale >= obj.scale_max)
+%                     obj.rho = scale * obj.rho;
+%                 end
+%             end
+%         end
         
         if (obj.QUIET)
             if (iter == 1)
@@ -92,7 +92,7 @@ end
 % Update on the splitting X variables (QP problem) 
 function [xt, zt] = X_update(obj, Rho, x, z, y)
     % KKT matrix 
-    A = obj.Pt + obj.sigma * eye(size(obj.Pt)) + (obj.At.' * Rho * obj.At);
+    A = obj.Pt + obj.sigma * eye(size(obj.Pt)) + obj.At.' * Rho * obj.At;
     b = obj.sigma * x - obj.qt + obj.At.' * (Rho * z - y);
 
     % Final variables

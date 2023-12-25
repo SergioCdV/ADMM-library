@@ -12,5 +12,5 @@
 % Outputs: - vector z, the update impulsive sequence
 
 function [p] = objective(c, x)
-    p = -dot(c,x); 
+    p = dot(c,x); 
 end

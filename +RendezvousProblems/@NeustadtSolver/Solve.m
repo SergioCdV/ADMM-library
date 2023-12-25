@@ -54,7 +54,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     GoOn = true;
 
     while (iter < maxIter && GoOn && N > 1)
-        v = [-b; -zeros(n * N,1)];
+        v = -[b; zeros(n * N,1)];
     
         % Pre-factoring of constants
         p = repmat(n, 1, N);
@@ -76,10 +76,14 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         % Problem
         Problem = Solvers.ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
     
-        if (~exist('alpha', 'var'))
-            alpha = 1;
+        if (exist('alpha', 'var'))
+            Problem.alpha = alpha;
         end
-        Problem.alpha = alpha;
+
+        if (exist('rho', 'var'))
+            Problem.rho = rho;
+        end
+        
         Problem.QUIET = false;
 
         % Solve the problem
@@ -174,16 +178,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         dv = reshape((A.'\b), n, []); 
     end
 
-    % Output
-    switch (obj.Thruster.p)
-        case 'L2'
-            obj.Cost = sqrt( dot(dv, dv, 1) );
-        case 'L1'
-            obj.Cost = sum( abs(dv), 1 );
-        case 'Linfty'
-            obj.Cost = max( abs(dv), [], 1 );
-    end
-
 %     k = 1;
 %     for i = 1:1000:size(z,2)
 %         dv = reshape(z(m+1:end,i), n, []);
@@ -198,9 +192,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     for i = 1:length(t_pruned)
         dV(:, t_pruned(i) == t) = dv(:,i);
     end
-
-    obj.Cost = dot(b,lambda);
    
+    obj.Cost = dot(-b, lambda);
     obj.Report = Output;                        % Optimization report
     obj.e(:,1) = b - M.' * reshape(dV, [], 1);  % Final missvector   
     obj.u = dV;                                 % Final rendezvous impulsive sequence

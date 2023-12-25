@@ -37,7 +37,7 @@ function [z] = ConeProj(indices, q, b, z)
     end
 
     % Lagrange multiplier update (projection on a half space)
-    lambda = half_space(lambda, -1, 0);
+    lambda = half_space(lambda, +1, 0);
 
     % Final vector
     z(1,1) = lambda;
