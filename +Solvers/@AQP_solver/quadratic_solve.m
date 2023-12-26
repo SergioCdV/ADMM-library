@@ -25,8 +25,9 @@ function [x, z, Output] = quadratic_solve(obj)
         obj.x(:,iter+1) = obj.alpha * xh + (1 - obj.alpha) * obj.x(:,iter);
 
         % Z update with relaxation
+        zh = obj.E \ zh;
         zh = obj.alpha * zh + (1-obj.alpha) * obj.z(:,iter) + obj.u ./ obj.rho;
-        obj.z(:,iter+1) = feval(obj.ConeProj, zh ./ diag(obj.E));
+        obj.z(:,iter+1) = feval(obj.ConeProj, zh);
 
         % Compute the residuals
         obj.u = Rho * (zh - obj.z(:,iter+1));
@@ -43,17 +44,15 @@ function [x, z, Output] = quadratic_solve(obj)
         Output.eps_dual(iter) = obj.AbsTol + obj.RelTol * b;
 
         % Update the penalty matrix 
-%         if (a ~= 0)
-%             a = Output.r_norm(iter) / a;        % Primal ratio
-%             if (b ~= 0)
-%                 b = Output.s_norm(iter) / b;    % Dual ratio
-%                 scale = sqrt(a / b);            % Penalty factors
-% 
-%                 if (scale <= obj.scale_min || scale >= obj.scale_max)
-%                     obj.rho = scale * obj.rho;
-%                 end
-%             end
-%         end
+        if (a ~= 0 && b ~= 0)
+            a = Output.r_norm(iter) / a;        % Primal ratio
+            b = Output.s_norm(iter) / b;        % Dual ratio
+            scale = sqrt(a / b);                % Penalty factors
+            
+            if (scale <= obj.scale_min || scale >= obj.scale_max)
+                obj.rho = scale * obj.rho;
+            end
+        end
         
         if (obj.QUIET)
             if (iter == 1)

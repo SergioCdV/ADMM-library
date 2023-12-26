@@ -1,15 +1,15 @@
 %% ADMM Library %% 
 % Sergio Cuevas del Valle
 % Date: 17/12/23
-% File: Ruiz_equilibration.m 
+% File: mRuiz_equil.m 
 % Issue: 0 
 % Validated: 
 
-%% Ruiz equilibration %%
+%% Modified Ruiz equilibration %%
 % This function contains the implementation of the modified Ruiz
 % equilibration procedure for general convex cones
 
-function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
+function [Pt, qt, At, c, D, E] = mRuiz_equil(P, q, A, eps)
     % Initilization 
     n = size(P,1);    % Dimension of the scaling matrix
     N = size(A,1);    % Dimension of the equality matrix
@@ -29,7 +29,7 @@ function [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps)
         % Form the M matrix 
         M1 = [Pt; At];
 
-        delta = [max(abs(M1), [], 1) max(abs(At), [], 2).'];
+        delta = [max(abs(M1), [], 2).' max(abs(At), [], 1)];
         delta(delta < 1e-5) = ones(1, length(delta(delta < 1e-5)));
         Delta = diag( 1 ./ sqrt(delta) );
 

@@ -46,7 +46,6 @@ classdef AQP_solver
         c;                          % Cost function scaling
         D;                          % Scaling sub-matrix
         E;                          % Scaling sub-matrix
-
     end
 
     properties (Access = private)
@@ -123,7 +122,17 @@ classdef AQP_solver
                 obj.rho = repmat(obj.rho, obj.m, 1);
 
                 % Matrix equilibration
-                [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.Ruiz_equilibration(obj.P, obj.q, obj.A, obj.eps_equil);
+                if (any(obj.P ~= 0))
+                    [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.mRuiz_equil(obj.P, obj.q, obj.A, obj.eps_equil);
+                else
+                    [obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.Ruiz_equil(obj.q, obj.A, obj.eps_equil);
+                    obj.Pt = obj.P;
+%                     obj.D = eye(size(obj.A,2));
+%                     obj.E = eye(size(obj.A,1));
+%                     obj.At = obj.A; 
+%                     obj.qt = obj.q;
+%                     obj.c = 1;
+                end
             end
         end
 
@@ -132,6 +141,7 @@ classdef AQP_solver
     end
 
     methods (Static, Access = private)
-        [Pt, qt, At, c, D, E] = Ruiz_equilibration(P, q, A, eps);   % Matrix equilibration
+        [Pt, qt, At, c, D, E] = mRuiz_equil(P, q, A, eps);   % Matrix equilibration
+        [qt, At, c, D, E]     =  Ruiz_equil(   q, A, eps);   % Matrix equilibration
     end
 end
