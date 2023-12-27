@@ -18,7 +18,7 @@ function [x, z, Output] = quadratic_solve(obj)
     % Solver
     while (GoOn && iter <= obj.MaxIter)
         % Compute the rho matrix 
-        Rho = diag(obj.rho);
+        Rho = obj.rho;
 
         % X update
         [xh, zh] = X_update(obj, Rho, obj.x(:,iter), obj.z(:,iter), obj.u);
