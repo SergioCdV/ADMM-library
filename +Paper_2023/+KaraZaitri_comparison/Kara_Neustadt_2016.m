@@ -31,8 +31,8 @@ t0 = 0;                 % Initial clock
 tf = nu_f/n;            % Final clock
 
 % Initial relative conditions 
-x0 = [-10e3 0 0 0];     % In-plane rendezvous
-xf = [-100 0 0 0];      % Final conditions
+x0 = [+10e3 0 0 0];     % In-plane rendezvous
+xf = [+100 0 0 0];      % Final conditions
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -53,7 +53,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 100;
+N = 400;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -93,7 +93,7 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.QuadNeustadtSolver(myMission, myThruster);
+myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
@@ -102,7 +102,7 @@ rho = 1/N^2;                                              % AL parameter
 eps = [1e-5; 1e-4];                                     % Numerical tolerance
 
 for i = 1:iter
-    [~, sol, ~, myProblem2] = myProblem.Solve(eps);
+    [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
     time(i) = myProblem2.SolveTime;
 end
 myProblem = myProblem2;

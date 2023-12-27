@@ -28,20 +28,20 @@ n = sqrt(mu/Orbit_t(1)^3);
 
 % Mission time
 t0 = 0;                 % Initial clock
-tf = 64620;             % Final clock
-% tf = 84360;
+
+% Initial relative conditions 
+% tf = 64620;             % Final clock
+% x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
+% xf = [-100 0 0 0];      % Final conditions
+
+tf = 84360;
+x0 = [5000 0 0 0];      % In-plane rendezvous
+xf = [1000 0 0 0];      % Final conditions
 
 K = floor(tf/(2*pi/n));
 dt = tf - K * (2*pi/n);
 
 nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), nu_0, dt);       % Final true anomaly 
-
-% Initial relative conditions 
-x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
-xf = [-100 0 0 0];      % Final conditions
-   
-% x0 = [5000 0 0 0];      % In-plane rendezvous
-% xf = [1000 0 0 0];      % Final conditions
 
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
