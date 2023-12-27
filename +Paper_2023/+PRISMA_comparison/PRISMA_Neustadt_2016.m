@@ -30,13 +30,13 @@ n = sqrt(mu/Orbit_t(1)^3);
 t0 = 0;                 % Initial clock
 
 % Initial relative conditions 
-% tf = 64620;             % Final clock
-% x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
-% xf = [-100 0 0 0];      % Final conditions
+tf = 64620;             % Final clock
+x0 = [-10 0 0 0]*1e3;   % In-plane rendezvous
+xf = [-100 0 0 0];      % Final conditions
 
-tf = 84360;
-x0 = [5000 0 0 0];      % In-plane rendezvous
-xf = [1000 0 0 0];      % Final conditions
+% tf = 84360;             % Final clock
+% x0 = [5000 0 0 0];      % In-plane rendezvous
+% xf = [1000 0 0 0];      % Final conditions
 
 K = floor(tf/(2*pi/n));
 dt = tf - K * (2*pi/n);
@@ -131,16 +131,16 @@ myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
+myProblem = RendezvousProblems.QuadNeustadtSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
 
 rho = 1/N^3;                                     % AL parameter 
-eps = [1e-6; 1e-5];                                     % Numerical tolerance
+eps = [1e-6; 0.01];                              % Numerical tolerance
 
 for i = 1:iter
-    [~, sol, ~, myProblem2] = myProblem.Solve(eps, rho);
+    [~, sol, ~, myProblem2] = myProblem.Solve(eps);
     time(i) = myProblem2.SolveTime;
 end
 myProblem = myProblem2;
