@@ -119,19 +119,14 @@ classdef AQP_solver
                 obj.z = zeros(obj.m, obj.MaxIter+1);
                 obj.u = zeros(obj.m, 1);
 
-                obj.rho = repmat(obj.rho, obj.m, 1);
+%                 obj.rho = repmat(obj.rho, obj.m, 1);
 
                 % Matrix equilibration
                 if (any(obj.P ~= 0))
-                    [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.mRuiz_equil(obj.P, obj.q, obj.A, obj.eps_equil);
+                    [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = Solvers.mRuiz_equil(obj.P, obj.q, obj.A, obj.eps_equil);
                 else
-                    [obj.qt, obj.At, obj.c, obj.D, obj.E] = obj.Ruiz_equil(obj.q, obj.A, obj.eps_equil);
+                    [obj.qt, obj.At, obj.c, obj.E, obj.D] = Solvers.Ruiz_equil(obj.q, obj.A, obj.eps_equil, 'R');
                     obj.Pt = obj.P;
-%                     obj.D = eye(size(obj.A,2));
-%                     obj.E = eye(size(obj.A,1));
-%                     obj.At = obj.A; 
-%                     obj.qt = obj.q;
-%                     obj.c = 1;
                 end
             end
         end
@@ -141,7 +136,6 @@ classdef AQP_solver
     end
 
     methods (Static, Access = private)
-        [Pt, qt, At, c, D, E] = mRuiz_equil(P, q, A, eps);   % Matrix equilibration
-        [qt, At, c, D, E]     =  Ruiz_equil(   q, A, eps);   % Matrix equilibration
+        [Pt, qt, At, c, D, E] = mRuiz_equil(P, q, A, eps);            % Matrix equilibration
     end
 end
