@@ -53,7 +53,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     iter = 1;
     GoOn = true;
 
-    while (iter < maxIter && GoOn && N > 1)    
+    while (iter < maxIter && GoOn)    
         % Pre-factoring of constants
         p = repmat(n, 1, N);
         cum_part = cumsum(p);
@@ -74,11 +74,11 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             Problem.rho = rho;
         end
         
-        Problem.QUIET = true;
+        Problem.QUIET = false;
 
         % Solve the problem
         tic
-        [x, z, Output] = Problem.solver();
+        [x, ~, Output] = Problem.solver();
         obj.SolveTime = toc;
 
         % Output
@@ -103,9 +103,20 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
             iter = iter+1;
             index = p_norm > 1 - epsilon(2);
             N = sum(index);
-            t_pruned = t_pruned(logical(index));
-            index = kron(index, ones(1,n));
-            Phi = Phi(logical(index),:);
+
+            if (N > 2)
+                t_pruned = t_pruned(logical(index));
+                index = kron(index, ones(1,n));
+                Phi = Phi(logical(index),:);
+            else
+                % Reset
+                t_pruned = t;
+                N = length(t_pruned);
+                Phi = M;
+
+                % Inflate rho 
+                rho = 10 * Problem.rho;
+            end
         end
     end
     
@@ -113,7 +124,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     u = [lambda; M * lambda];
 
     % Computation of the control law
-%     p = reshape(z(m+1:end,end), n, []);
     N = size(p,2);
 
     switch (obj.Thruster.q)
@@ -126,41 +136,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     end
 
     imp_opp = abs(p_norm-1) < epsilon(1);
-
-    if (sum(imp_opp) > 1e3)
-        dp = p_norm-1;
-        d_dp = gradient(dp); 
-        dd_dp = gradient(d_dp);
-        dp = abs(dp);
-        [~, pos] = sort(dp);
-        index = zeros(1,length(p_norm));
-
-        k = 0;
-        for i = 1:length(pos)
-            if (t(pos(i)) == t(1) && sign(d_dp(1)) < 0)
-                index(pos(i)) = 1;
-                k = k+1;
-            elseif (t(pos(i)) == t(end) && sign(d_dp(end)) > 0)
-                index(pos(i)) = 1;
-                k = k+1;
-            elseif (sign(dd_dp(pos(i))) < 0)
-                index(pos(i)) = 1;
-                k = k+1;
-            end
-
-            if (k == m)
-                break;
-            end
-        end
-        
-        index = logical(index);
-        t_pruned = t_pruned(index);
-        index = kron(index, ones(1,n));
-        
-    elseif (~isempty(Phi))
-        t_pruned = t_pruned(logical(imp_opp));
-        index = kron(imp_opp, ones(1,n));
-    end
+    t_thrust = t_pruned(logical(imp_opp));
+    index = kron(imp_opp, ones(1,n));
 
     dv = zeros(n,N);
     if (~isempty(Phi))
@@ -169,19 +146,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
     end
 
     % Output
-%     k = 1;
-%     for i = 1:1000:size(z,2)
-%         dv = reshape(z(m+1:end,i), n, []);
-%         dVs(:,k) = sqrt(dot(dv,dv,1));
-%         k = k+1;
-%     end
-% 
-%     figure 
-%     stem3(1:1000:size(z,2),t,dVs, 'LineStyle','none');
-
     dV = zeros(n, length(t));
-    for i = 1:length(t_pruned)
-        dV(:, t_pruned(i) == t) = dv(:,i);
+    for i = 1:length(t_thrust)
+        dV(:, t_thrust(i) == t) = dv(:,i);
     end
    
     obj.Cost = -dot(b,lambda);                  % Problem's cost
