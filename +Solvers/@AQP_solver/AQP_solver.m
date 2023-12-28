@@ -123,7 +123,7 @@ classdef AQP_solver
 
                 % Matrix equilibration
                 if (any(obj.P ~= 0))
-                    [obj.Pt, obj.qt, obj.At, obj.c, obj.D, obj.E] = Solvers.mRuiz_equil(obj.P, obj.q, obj.A, obj.eps_equil);
+                    [obj.Pt, obj.qt, obj.At, obj.c, obj.E, obj.D] = Solvers.mRuiz_equil(obj.P, obj.q, obj.A, obj.eps_equil);
                 else
                     [obj.qt, obj.At, obj.c, obj.E, obj.D] = Solvers.Ruiz_equil(obj.q, obj.A, obj.eps_equil, 'R');
                     obj.Pt = obj.P;

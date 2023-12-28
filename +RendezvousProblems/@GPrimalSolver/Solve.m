@@ -25,23 +25,24 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     t = obj.Mission.t;                      % Mission clock
     N = length(t);                          % Number of total opportunities
     STM = obj.Mission.Phi;                  % STM of the system
-    B = obj.Mission.B;                      % Control input of the system
+    Bc = obj.Mission.B;                     % Control input of the system
     m = obj.Mission.m;                      % State vector dimension
     n = obj.Mission.n;                      % Control input dimension
 
-    Phi = zeros(size(STM,1), size(B,2));
+    % Equilibration 
+    Phi = zeros(size(STM,1), size(Bc,2));
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = M * ( STM(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
+        Phi(:,1+n*(i-1):n*i) = M * (STM(:,1+m*(i-1):m*i) \ Bc(:,1+n*(i-1):n*i));
     end
 
     % Compute the initial missvector
     b = xf - M * x0;
 
     % Pre-factoring of constants
-    Atb = pinv(Phi)*b;
-    pInvA = (eye(size(Phi,2))-pinv(Phi)*Phi);
+    Atb = pinv(Phi) * b;
+    pInvA = eye(size(Phi,2)) - pinv(Phi) * Phi;
     p = repmat(n, 1, N);
     cum_part = cumsum(p);
 
@@ -51,7 +52,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Thruster.p, rho, x, z, u));
 
     % ADMM consensus constraint definition 
-    A = eye(n * N);
+    A = +eye(n * N);
     B = -eye(n * N);        
     c = zeros(n * N,1);
 
@@ -61,7 +62,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     if (exist('alpha', 'var'))
         Problem.alpha = alpha;
     end
-    Problem.QUIET = false;
+    Problem.QUIET = true;
 
     % Optimization
     tic

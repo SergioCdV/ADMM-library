@@ -121,8 +121,4 @@ classdef ADMM_solver
         % General and eye solvers
         [x, z, Output] = solve(obj, solver_type);  
     end
-
-    methods (Static, Access = private)
-        [D, E] = Ruiz_equilibration(obj);   % Matrix equilibration
-    end
 end

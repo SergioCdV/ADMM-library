@@ -9,7 +9,7 @@
 % This function contains the implementation of the modified Ruiz
 % equilibration procedure for general convex cones
 
-function [Pt, qt, At, c, D, E] = mRuiz_equil(P, q, A, eps)
+function [Pt, qt, At, c, E, D] = mRuiz_equil(P, q, A, eps)
     % Initilization 
     n = size(P,1);    % Dimension of the scaling matrix
     N = size(A,1);    % Dimension of the equality matrix
