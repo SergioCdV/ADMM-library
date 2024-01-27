@@ -30,7 +30,7 @@ for i = 1:length(t)
 end
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV);
+[dV, cost] = RendezvousProblems.GenPotterSolver.PVT_pruner(Phi, B, dV);
 
 %% Test case II %%
 % Time span
@@ -49,4 +49,4 @@ Phi = [cos(t).' sin(t.') -sin(t.') cos(t.')];
 Phi = reshape(Phi.', 2, []);
 
 % Pruning 
-[dV, cost] = PVT_pruner(Phi, B, dV);
+[dV, cost] = RendezvousProblems.GenPotterSolver.PVT_pruner(Phi, B, dV);

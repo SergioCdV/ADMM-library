@@ -111,10 +111,11 @@ for i = 1:iter
     time(2,i) = toc;
 end
 
+myPotterProblem = RendezvousProblems.GenPotterSolver(myMission, myThruster);
 % Pruning solution
 for i = 1:iter
     tic
-    [dV3, cost] = PVT_pruner(PVT_STM, B, dV2);
+    [~, dV3, ~, myPotterProblem2] = myPotterProblem.Solve();
     time(3,i) = toc;
 end
 
