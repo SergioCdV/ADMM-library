@@ -32,7 +32,7 @@ n = 1;               % Characteristic frequency
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 250;
+N = 100;
 t = linspace(0, tf, N);
 nu = t;
 

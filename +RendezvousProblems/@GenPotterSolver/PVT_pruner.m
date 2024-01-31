@@ -152,10 +152,10 @@ function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
 
     if (size(U,2) > m)
         % Compute the coordinate vector associated to a null impulse
-        lmax = sum(lambda);
-        e = lambda - U(:,end) * lmax;
-        alpha = ( U(:,1:end-1) \ e ).';
-        alpha = [alpha lmax];
+        e = U \ lambda;
+        v = null(U);
+        c = ones(size(v,2),1);
+        alpha = (e + v * c).';
 
         Alpha = sum(alpha(1:size(U,2)));
         if (Alpha < 0)
@@ -175,8 +175,8 @@ function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
                     V = mu .* V;
                     x(:,Indx) = reshape(V, size(x(:,Indx),2), size(x,1)).';
                     
-                    idc = sum(x,1) > xmax;
-                    x(:,idc) = xmax * x(:,idc) ./ sum(x(:,idc), 1);
+%                     idc = sum(x,1) > xmax;
+%                     x(:,idc) = xmax * x(:,idc) ./ sum(x(:,idc), 1);
                                        
                 case 'Linfty'
             end
@@ -195,10 +195,6 @@ function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
 
         case 'Linfty'
             cost = max( abs(dV(1:n,:)), [], 1 );
-    end
-    a = max(cost + x(end,:))
-    if (a > xmax)
-        a = 1;
     end
 
     % Final cost
