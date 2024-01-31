@@ -43,34 +43,9 @@ function [t, u, e, obj] = Solve(obj)
     x0 = reshape(x0, n, []);             % Initial sequence
 
     % Saturation
-    switch (obj.Thruster.q)
-        case 'L1'
-            q_norm = max(abs(x0), [], 1);
 
-        case 'L2'
-            q_norm = sqrt(dot(x0, x0, 1));
-            x0 = [x0; ...
-                 (-q_norm + obj.Thruster.umin) .* (q_norm < obj.Thruster.umin & q_norm > 0); ...
-                 (+q_norm - obj.Thruster.umax) .* (q_norm > obj.Thruster.umax & q_norm > 0)];
-            
-            if (obj.Thruster.umax == Inf)
-                x0 = x0(1:2,:);
-            end
-
-            if (obj.Thruster.umin == 0)
-                if (size(x0,1) == 3)
-                    x0 = [x0(1,:); x0(3:end,:)];
-                else
-                    x0 = x0(1,:);
-                end
-            end
-    
-        case 'Linfty'
-            error('Constrained Linfty rendezvous is not yet implemented');
-    end
 
     % Prunning by the Generalized Potter Algoritm 
-    
     [sol, obj.Cost] = obj.PVT_pruner(STM, B, x0, obj.Thruster.umax, obj.Thruster.umin, obj.Thruster.p); 
     
     % Polishing 
@@ -89,8 +64,9 @@ function [t, u, e, obj] = Solve(obj)
 
         dV = zeros(n, N);
         dV(:, logical(ti)) = reshape(sol, n, []);
+        sol = reshape(dV, [], 1);
     else
-        dV = reshape(sol, n, []);
+        dV = sol;
     end
 
     obj.SolveTime = toc;

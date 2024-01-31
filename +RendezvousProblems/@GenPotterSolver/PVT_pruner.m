@@ -24,145 +24,183 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
     % Constants 
     m = size(Phi,1);                              % Dimension of the state space
     n = size(dV,1);                               % Dimension of the control space
+    N = size(dV,2);                               % Length of the sequence
     num_sequence = size(dV,2)-(size(Phi,1)+1);    % Number of sequence reductions
-    sequence = dV;                                % Initial sequence
 
     % Sanity checks
-    if (size(B,2) == size(dV,1))
-        B = repmat(B, [1 size(dV,2)]);
-    end
-
-    if (~exist('dVmax', 'var'))
-        dVmax = Inf;
-    end
-
-    if (~exist('dVmin', 'var'))
-        dVmin = 1E-6;
-    end
-
-    if (~exist('p', 'var'))
-        p = 'L2';
-    end
-
-    switch (p)
-        case 'L1'
-            q = 'Linfty';
-        case 'L2'
-            q = 'L2';
-        case 'Linfty'
-            q = 'L1';
-        otherwise
-            error('No valid thruster configuration was selected');
-    end
-
-    if (size(dV,1) ~= n)
-        try 
-            dV = reshape(dV, n, []);
-        catch
-            error('Input control dimension mismatches the initial solution');
-        end
-    end
-
-    % Compute the initial cost 
-    switch (p)
-        case 'L2'
-            cost = sqrt( dot(dV,dV,1) );
-        case 'L1'
-            cost = sum( abs(dV), 1 );
-        case 'Linfty'
-            cost = max( abs(dV), [], 1 );
-    end
-
-    cost = sum(cost);
-
-    % Initial setup
     if (num_sequence >= 0)
-        % Get the sequence 
-        V = sqrt(dot(sequence, sequence,1));
-        index = V > 0 & V <= dVmax;
-
-        while (sum(index) >= m+1)
-            % Reduce the sequence
-            seq = sequence(:,index);
-            Pos = logical( kron(index, ones(1,m)) );
-            phi = Phi(:,Pos);
-            Pos = logical( kron(index, ones(1,n)) );
-            b = B(:,Pos);
-            pos = 1:m+1:size(seq,2);
-
-            if (length(pos) > 1)
-                for i = 1:length(pos)-1
-                    Pos_s = logical( kron(pos(i):pos(i+1)-1, ones(1,m)) );
-                    Pos_c = logical( kron(pos(i):pos(i+1)-1, ones(1,n)) );
-                    [seq(:,pos(i):pos(i+1)-1), cost] = sequence_reduction(phi(:,Pos_s) , b(:,Pos_c), seq(:,pos(i):pos(i+1)-1), dVmax, dVmin, p, q);
-                end
-            else
-                [seq, cost] = sequence_reduction(phi, b, seq, dVmax, dVmin, p);
-            end
-
-            % Final sequence
-            sequence(:,index) = seq;
-
-            % Get the sequence 
-            V = sqrt(dot(sequence, sequence,1));
-            index = V > 0 & V <= dVmax;
+        if (size(B,2) == size(dV,1))
+            B = repmat(B, [1 size(dV,2)]);
         end
     
-        % Final sequence 
-        dV = sequence; 
+        if (~exist('dVmax', 'var'))
+            dVmax = Inf;
+        elseif (dVmax <= 0)
+            error('Maximum control authority must be positive.')
+        end
+    
+        if (~exist('dVmin', 'var'))
+            dVmin = 0;
+        elseif (dVmax <= 0)
+            error('Minimum control authority must be positive.')
+        end
+    
+        if (~exist('p', 'var'))
+            p = 'L2';
+        end
+    
+        % Compute the initial cost and get the Holder conjugate norm
+        switch (p)
+            case 'L1'
+                q = 'Linfty';
+                cost = sum( abs(dV), 1 );
+            case 'L2'
+                q = 'L2';
+                cost = sqrt( dot(dV, dV, 1) );
+            case 'Linfty'
+                q = 'L1';
+                cost = max( abs(dV), [], 1 );
+            otherwise
+                error('No valid thruster configuration was selected');
+        end
+        cost = sum(cost);
+    
+        % Get the initial solution
+        switch (q)
+            case 'L1'
+                V = max(abs(dV), [], 1);
+    
+            case 'L2'
+                V = sqrt(dot(dV, dV, 1));                   % L2 norm
+                
+                % Final dynamic matrix
+                M = Phi(:,end-m+1:end);
+            
+                u = zeros(m,N);
+                for i = 1:N
+                    R = M * ( Phi(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
+                    u(:,i) = R * dV(1:n,i);
+                end
+
+                Idx = V ~= 0;                         % Non-zero elements
+                u(:,Idx) = u(:,Idx) ./ V(Idx);        % Normal costs
+
+                % Initial setup
+                con_vector = zeros(m,1);
+                
+                if (dVmax ~= Inf)
+                    if (any(V > dVmax))
+                        error('Infeasible initial solution')
+                    else
+                        V = [V; dVmax - V];
+                    end
+                end
+    
+                if (dVmin > 0)
+                    if (any(V < dVmin))
+                        error('Infeasible initial solution')
+                    else
+                        V = [V; V - dVmin];
+                    end
+                end
+        
+            case 'Linfty'
+                error('Constrained Linfty rendezvous is not yet implemented');
+                V = max(abs(sequence(1:n,:)), [], 1);
+        end
+
+        % Prune the sequence 
+        for i = 1:num_sequence+1
+            index = 1:m+i;
+            [V(:,index), cost] = sequence_reduction(m, n, N, p, q, u(:,index), V(:,index), con_vector, dVmax, dVmin);
+        end
+    
+        % Final sequence
+        switch (q)
+            case 'L2'
+                u = dV; 
+                u(:,Idx) = u(:,Idx) ./ sqrt(dot(dV(:,Idx), dV(:,Idx), 1));
+                dV = V(1,:) .* u; 
+            case 'L1'
+            case 'Linfty'
+        end
     end
 end
 
 %% Auxiliary functions 
-function [dV, cost] = sequence_reduction(Phi, B, dV, dVmax, dVmin, p, q)
-    % Constants 
-    m = size(B,1);      % Dimension of the state space
-    n = size(dV,1);     % Dimension of the control space
+function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
+    % Final indices
+    switch (q)
+        case 'L2'
+            Indx = x(1,:) ~= 0;               % Non-zero impulses
+            N = sum(Indx);                    % Number of non-zero variables
+            U = u(:,Indx);                    % Considered subset of the sequence
+            V = reshape(x(:,Indx).', 1, []);  % Get all the variables in a column
 
-    % Final dynamic matrix
-    M = Phi(:,end-m+1:end);
+            if (size(x,1) == 2)
+                U = [U zeros(m, N); eye(N) eye(N)];
+                lambda = [lambda; xmax * ones(N,1)];
+            end
 
-    u = zeros(m, size(dV,2));
-    for i = 1:size(dV,2)
-        R = M * ( Phi(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
-        u(:,i) = R * dV(:,i);
+            if (size(x,2) == 3)
+                U = [U zeros(m, N); eye(N) -eye(N)];
+                lambda = [lambda; xmin * ones(N,1)];
+            end
+
+        otherwise
     end
 
-    % Final globa matrix
-    V = sqrt( dot(dV, dV, 1) );
-
-    u(:, V ~= 0) = u(:, V ~= 0)./V(V ~= 0);
-    index = V == 0 | V >= dVmax;
-    dumb = u(:,~index);
-
-    if (sum(~index) >= 2)
+    if (size(U,2) > m)
         % Compute the coordinate vector associated to a null impulse
-        v = (-dumb(:,1:end-1)\dumb(:,end)).';
-        dumb = [v 1];
-    
-        alpha = zeros(1,size(u,2));
-        alpha(~index) = dumb;
+        lmax = sum(lambda);
+        e = lambda - U(:,end) * lmax;
+        alpha = ( U(:,1:end-1) \ e ).';
+        alpha = [alpha lmax];
 
-        Alpha = sum(alpha);
+        Alpha = sum(alpha(1:size(U,2)));
         if (Alpha < 0)
             alpha = -alpha;                     % Ensure feasibility of the solution
         end
     
         % Update the impulse sequence 
-        beta = alpha(V ~= 0) ./ V(V ~= 0);      % Compute the sequence ratios
-        beta_r = max(beta);                     % Minimum ratio
-        mu = 1 - beta ./ beta_r;                % New sequence magnitudes
-        dV(:,V ~= 0) = mu .* dV(:,V ~= 0);      % New sequence
+        beta = alpha ./ V;                      % Compute the sequence ratios
+        beta_r = max(beta(alpha > 0));          % Minimum ratio
+
+        if (beta_r > 0)
+            mu = 1 - beta ./ beta_r;            % New sequence magnitudes
+            
+            % New sequence and slack variables
+            switch (q)
+                case 'L2'
+                    V = mu .* V;
+                    x(:,Indx) = reshape(V, size(x(:,Indx),2), size(x,1)).';
+                    
+                    idc = sum(x,1) > xmax;
+                    x(:,idc) = xmax * x(:,idc) ./ sum(x(:,idc), 1);
+                                       
+                case 'Linfty'
+            end
+        else
+            warning('Infeasibility detected. Adding coasting does not improve the solution')
+        end
+    end
+
+    % Final cost and saturation
+    switch (p)
+        case 'L2'
+            cost = x(1,:);
+            
+        case 'L1'
+            cost = sum( abs(dV(1:n,:)), 1 );
+
+        case 'Linfty'
+            cost = max( abs(dV(1:n,:)), [], 1 );
+    end
+    a = max(cost + x(end,:))
+    if (a > xmax)
+        a = 1;
     end
 
     % Final cost
-    switch (p)
-        case 'L2'
-            cost = sqrt( dot(dV,dV,1) );
-        case 'L1'
-            cost = sum( abs(dV), 1 );
-        case 'Linfty'
-            cost = max( abs(dV), [], 1 );
-    end
     cost = sum(cost);
 end

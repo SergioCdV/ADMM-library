@@ -62,12 +62,13 @@ B = repmat([zeros(3); eye(3)], 1, length(t));
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, Phi, B, x0, xf, K);        % Mission
+myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+dVmax = 80;                                             % Maximum control authority
+
+myThruster = thruster('L2', dVmin / Vc / n, dVmax / Vc / n);
 
 %% Optimization
 % Define the ADMM problem 
@@ -110,7 +111,7 @@ for i = 1:iter
     dV2 = reshape(dV2, n, []);
     time(2,i) = toc;
 end
-
+%%
 myPotterProblem = RendezvousProblems.GenPotterSolver(myMission, myThruster);
 % Pruning solution
 for i = 1:iter
@@ -195,7 +196,11 @@ end
 %% Results 
 figure
 hold on
-stem(t, dV_norm * Vc * n, 'filled'); 
+if (dVmax ~= Inf)
+    yline(dVmax, 'k--')
+    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+end
+stem(t, dV_norm * Vc * n, 'filled');
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
 xlabel('$t$ [-]')
@@ -205,6 +210,10 @@ xlim([0 t(end)])
 
 figure
 hold on
+if (dVmax ~= Inf)
+    yline(dVmax, 'k--')
+    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+end
 stem(t, dV2_norm * Vc * n, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
@@ -215,6 +224,10 @@ xlim([0 t(end)])
 
 figure
 hold on
+if (dVmax ~= Inf)
+    yline(dVmax, 'k--')
+    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+end
 stem(t, dV3_norm * Vc * n, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
