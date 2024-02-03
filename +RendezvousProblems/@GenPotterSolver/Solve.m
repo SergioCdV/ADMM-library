@@ -44,9 +44,8 @@ function [t, u, e, obj] = Solve(obj)
 
     % Saturation
 
-
     % Prunning by the Generalized Potter Algoritm 
-    [sol, obj.Cost] = obj.PVT_pruner(STM, B, x0, obj.Thruster.umax, obj.Thruster.umin, obj.Thruster.p); 
+    [sol, obj.Cost] = obj.PVT_pruner(STM, B, x0, obj.Thruster.umax, obj.Thruster.umin, obj.Thruster.p);
     
     % Polishing 
     if (obj.pol_flag)

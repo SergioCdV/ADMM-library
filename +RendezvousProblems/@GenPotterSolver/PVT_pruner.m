@@ -67,11 +67,57 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
     
         % Get the initial solution
         switch (q)
-            case 'L1'
-                V = max(abs(dV), [], 1);
+            case 'Linfty'
+                % Final dynamic matrix
+                M = Phi(:,end-m+1:end);
+            
+                u = zeros(m, n * N);
+                for i = 1:N
+                    R = M * ( Phi(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
+                    u(:,1 + n * (i-1) : n * i) = R;
+                end
+
+                % Initial setup
+                con_vector = zeros(m,1);
+
+                % Basis pursuit formulation
+                B = reshape(dV, [], 1);
+                V = zeros(2, size(B,1));
+
+                for i = 1:size(B,1)
+                    if (B(i) >= 0)
+                        V(1,i) = B(i,1);
+                        V(2,i) = 0;
+                    else
+                        V(1,i) = 0;
+                        V(2,i) = -B(i,1);
+                    end
+                end
+
+                V = [reshape(V(1,:), n, []); reshape(V(2,:), n, [])];
+
+                Vnorm = max(abs(dV), [], 1);
+
+                if (dVmax ~= Inf)
+                    if (any(Vnorm > dVmax))
+                        error('Pruner cannot continue. Infeasible initial solution detected.')
+                    else
+                        V = [V; ...
+                             dVmax - V(1,:)];
+                    end
+                end
+    
+                if (dVmin > 0)
+                    if (any(Vnorm < dVmin))
+                         error('Pruner cannot continue. Infeasible initial solution detected.')
+                    else
+                        V = [V; ...
+                             V(1,:) - dVmin];
+                    end
+                end
     
             case 'L2'
-                V = sqrt(dot(dV, dV, 1));                   % L2 norm
+                Vnorm = sqrt(dot(dV, dV, 1));                   % L2 norm
                 
                 % Final dynamic matrix
                 M = Phi(:,end-m+1:end);
@@ -82,29 +128,32 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                     u(:,i) = R * dV(1:n,i);
                 end
 
-                Idx = V ~= 0;                         % Non-zero elements
-                u(:,Idx) = u(:,Idx) ./ V(Idx);        % Normal costs
+                Idx = Vnorm ~= 0;                         % Non-zero elements
+                u(:,Idx) = u(:,Idx) ./ Vnorm(Idx);        % Normal costs
 
                 % Initial setup
                 con_vector = zeros(m,1);
-                
+                V = Vnorm; 
+
                 if (dVmax ~= Inf)
-                    if (any(V > dVmax))
-                        error('Infeasible initial solution')
+                    if (any(Vnorm > dVmax))
+                        error('Pruner cannot continue. Infeasible initial solution detected.')
                     else
-                        V = [V; dVmax - V];
+                        V = [V; ...
+                             dVmax - Vnorm];
                     end
                 end
     
                 if (dVmin > 0)
-                    if (any(V < dVmin))
-                        error('Infeasible initial solution')
+                    if (any(Vnorm < dVmin))
+                         error('Pruner cannot continue. Infeasible initial solution detected.')
                     else
-                        V = [V; V - dVmin];
+                        V = [V; ...
+                             Vnorm - dVmin];
                     end
                 end
         
-            case 'Linfty'
+            case 'L1'
                 error('Constrained Linfty rendezvous is not yet implemented');
                 V = max(abs(sequence(1:n,:)), [], 1);
         end
@@ -112,76 +161,121 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
         % Prune the sequence 
         for i = 1:num_sequence+1
             index = 1:m+i;
-            [V(:,index), cost] = sequence_reduction(m, n, N, p, q, u(:,index), V(:,index), con_vector, dVmax, dVmin);
+            
+            switch (p)
+                case 'L1'
+                    idx = logical( kron(index, ones(1,n)) );
+                case 'L2'
+                    idx = index;
+                otherwise
+            end
+
+            [V(:,index), cost] = sequence_reduction(m, n, p, q, u(:,idx), V(:,index), con_vector, dVmax, dVmin);
         end
     
         % Final sequence
-        switch (q)
+        switch (p)
             case 'L2'
                 u = dV; 
                 u(:,Idx) = u(:,Idx) ./ sqrt(dot(dV(:,Idx), dV(:,Idx), 1));
                 dV = V(1,:) .* u; 
             case 'L1'
+                dV = V(1:n,:) - V(n+1:2*n,:); 
             case 'Linfty'
         end
     end
 end
 
 %% Auxiliary functions 
-function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
+function [x, cost] = sequence_reduction(m, n, p, q, u, x, lambda, xmax, xmin)
     % Final indices
     switch (q)
         case 'L2'
-            Indx = x(1,:) ~= 0;               % Non-zero impulses
-            N = sum(Indx);                    % Number of non-zero variables
-            U = u(:,Indx);                    % Considered subset of the sequence
-            V = reshape(x(:,Indx).', 1, []);  % Get all the variables in a column
+            Indx = x(1,:) ~= 0;                     % Feasible impulses, non-vertex
 
-            if (size(x,1) == 2)
+            if (xmax ~= Inf)
+                Indx = Indx & x(1,:) < xmax;
+                Indx = Indx & x(2,:) ~= 0;
+            end
+
+            if (xmin > 0)
+                Indx = Indx & x(1,:) > xmin; 
+                Indx = Indx & x(end,:) ~= 0;
+            end
+
+            N = sum(Indx);                          % Number of non-zero variables
+            U = u(:,Indx);                          % Considered subset of the sequence
+            V = reshape(x(:,Indx).', 1, []);        % Get all the variables in a column
+
+            % Assemble the constraint matrix 
+            dim = size(x,1);
+            if (dim >= 2)
                 U = [U zeros(m, N); eye(N) eye(N)];
                 lambda = [lambda; xmax * ones(N,1)];
             end
-
-            if (size(x,2) == 3)
-                U = [U zeros(m, N); eye(N) -eye(N)];
+    
+            if (dim == 3)
+                if (dim > 2)
+                    U = [U zeros(size(U,1), N); eye(N) zeros(N) -eye(N)];
+                else
+                    U = [U zeros(m, N); eye(N) -eye(N)];
+                end
                 lambda = [lambda; xmin * ones(N,1)];
             end
 
+        case 'Linfty'
+            % Feasible impulses, non-vertex
+            Indx = sum(x(1:2*n,:),1) ~= 0;
+
+            if (xmax ~= Inf)
+                Indx = Indx & x(2,:) ~= 0;
+            end
+
+            if (xmin > 0)
+                Indx = Indx & x(1,:) > xmin; 
+                Indx = Indx & x(end,:) ~= 0;
+            end
+
+            N = sum(Indx);                          % Number of non-zero variables
+            V = reshape(x(:,Indx).', 1, []);        % Get all the variables in a column
+
+            Indx = logical( kron(Indx, ones(1,n)) );
+            U = [u(:,Indx) -u(:,Indx)];             % Considered subset of the sequence
+            
         otherwise
     end
 
-    if (size(U,2) > m)
+    if (N > m)
         % Compute the coordinate vector associated to a null impulse
         e = U \ lambda;
         v = null(U);
         c = ones(size(v,2),1);
         alpha = (e + v * c).';
 
-        Alpha = sum(alpha(1:size(U,2)));
-        if (Alpha < 0)
-            alpha = -alpha;                     % Ensure feasibility of the solution
+        if (sum(lambda) == 0)
+            Alpha = sum(alpha(1:m+1));
+            if (Alpha < 0)
+                alpha = -alpha;                 % Ensure feasibility of the solution in the unconstrained case
+            end
         end
     
         % Update the impulse sequence 
-        beta = alpha ./ V;                      % Compute the sequence ratios
-        beta_r = max(beta(alpha > 0));          % Minimum ratio
+        beta = V ./ alpha;                      % Compute the sequence ratios
+        beta_r = min(beta(alpha > 0));          % Minimum ratio
 
         if (beta_r > 0)
-            mu = 1 - beta ./ beta_r;            % New sequence magnitudes
+            mu = 1 - beta_r ./ beta;            % New sequence magnitudes
             
             % New sequence and slack variables
             switch (q)
                 case 'L2'
                     V = mu .* V;
                     x(:,Indx) = reshape(V, size(x(:,Indx),2), size(x,1)).';
-                    
-%                     idc = sum(x,1) > xmax;
-%                     x(:,idc) = xmax * x(:,idc) ./ sum(x(:,idc), 1);
                                        
                 case 'Linfty'
             end
         else
-            warning('Infeasibility detected. Adding coasting does not improve the solution')
+            warning('Infeasibility detected. Adding coasting will not improve the solution')
         end
     end
 
@@ -191,7 +285,7 @@ function [x, cost] = sequence_reduction(m, n, N, p, q, u, x, lambda, xmax, xmin)
             cost = x(1,:);
             
         case 'L1'
-            cost = sum( abs(dV(1:n,:)), 1 );
+            cost = sum( x(1:2,:), 1 );
 
         case 'Linfty'
             cost = max( abs(dV(1:n,:)), [], 1 );

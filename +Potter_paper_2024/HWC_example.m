@@ -32,7 +32,7 @@ n = 1;               % Characteristic frequency
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 100;
+N = 250;
 t = linspace(0, tf, N);
 nu = t;
 
@@ -66,9 +66,9 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 80;                                             % Maximum control authority
+dVmax = Inf;                                             % Maximum control authority
 
-myThruster = thruster('L2', dVmin / Vc / n, dVmax / Vc / n);
+myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
 
 %% Optimization
 % Define the ADMM problem 
@@ -198,9 +198,15 @@ figure
 hold on
 if (dVmax ~= Inf)
     yline(dVmax, 'k--')
-    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+
+    if (dVmax > 0)
+        yline(dVmin, 'k--')
+        legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
+    else
+        legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
 end
-stem(t, dV_norm * Vc * n, 'filled');
+stem(t, dV_norm * Vc, 'filled');
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
 xlabel('$t$ [-]')
@@ -212,9 +218,14 @@ figure
 hold on
 if (dVmax ~= Inf)
     yline(dVmax, 'k--')
-    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    if (dVmax > 0)
+        yline(dVmin, 'k--')
+        legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
+    else
+        legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
 end
-stem(t, dV2_norm * Vc * n, 'filled'); 
+stem(t, dV2_norm * Vc, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
 xlabel('$t$ [-]')
@@ -226,9 +237,14 @@ figure
 hold on
 if (dVmax ~= Inf)
     yline(dVmax, 'k--')
-    legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    if (dVmax > 0)
+        yline(dVmin, 'k--')
+        legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
+    else
+        legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
 end
-stem(t, dV3_norm * Vc * n, 'filled'); 
+stem(t, dV3_norm * Vc, 'filled'); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
 xlabel('$t$ [-]')
