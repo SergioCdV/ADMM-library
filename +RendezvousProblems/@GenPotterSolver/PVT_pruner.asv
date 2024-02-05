@@ -126,30 +126,16 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 u(:,Idx) = u(:,Idx) ./ Vnorm(Idx);        % Normal costs
 
                 % Equlibration
-                A = u;
-                if (any(dVmax ~= Inf))       
-                    A = [A; eye(N)]; 
-                end
-
-                if (any(dVmin > 0))
-                    A = [A; -eye(N)];
-                end
-
-                qf = ones(N,1);
-
-                [qf, U, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
+                [qf, U, ~, ~, D2] = Solvers.Ruiz_equil(ones(N,1), [u; eye(N); -eye(N)], 1e-5, 'R');
 
                 % Initial setup
                 u = U(1:m,:);
                 con_vector = zeros(m,1);                  % Constraint vector
-                Vnorm = Vnorm / D2;                   % Equilibration of the initial sequence
-                V = Vnorm;
-
+                invD = D2^(-1);                           % Equilibration matrix
+                Vnor = Vnorm * invD.';                       % Equilibration of the initial sequence
+                
                 if (any(dVmax ~= Inf))
                     
-                    % Equilibration of the bounds
-                    dVmax = dVmax * D1(m+1:m+N, m+1:m+N).';
-
                     if (any(Vnorm > dVmax))
                         error('Pruner cannot continue. Infeasible initial solution detected.')
                     else
@@ -160,9 +146,6 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 end
     
                 if (any(dVmin > 0))
-
-                    % Equilibration of the bounds
-                    dVmin = dVmin * D1(m+N+1:m+2*N, m+N+1:m+2*N).';
 
                     if (any(Vnorm < dVmin))
                          error('Pruner cannot continue. Infeasible initial solution detected.')
