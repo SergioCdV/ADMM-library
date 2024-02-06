@@ -9,7 +9,7 @@
 % Solve for the time-fixed CW optimal Lp problem using ADMM and PVT
 
 close; 
-clear; 
+clear all; 
 clc
 
 set_graphics();
@@ -66,7 +66,7 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                             % Maximum control authority
+dVmax = 10;                                             % Maximum control authority
 
 myThruster = thruster('L2', dVmin / Vc, dVmax / Vc);
 

@@ -86,32 +86,34 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 end
 
                 % Equilibration
-                [qf, u, ~, ~, D2] = Solvers.Ruiz_equil(ones(n*N,1), u, 1e-5, 'R');
-
+                A = [u -u];
+                qf = ones(2 * n * N,1);
+                [qf, A, ~, ~, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, 'R');
+                D2 = diag(D2).';
+                
                 % Initial setup
+                u = A(1:m,1:n*N);
+                qf = qf(1:n*N,1);
                 con_vector = zeros(m,1);
 
                 % Basis pursuit formulation
-                B = D2 \ reshape(dV, [], 1);
+                B = reshape(dV, n * N, 1);
+
                 V = zeros(2, size(B,1));
-                qf = repmat(qf, 2, 1);
+                V(1, B > 0) = +B(B > 0,1).';
+                V(2, B < 0) = -B(B < 0,1).';
 
-                V(1, B >= 0) = +B(B >= 0,1).';
-                V(2, B < 0) =  -B(B < 0,1).';
-                V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N);];
+                V(1,:) = V(1,:) ./ D2(1,1:n*N) ;
+                V(2,:) = V(2,:) ./ D2(1, n*N+1:2*n*N);
 
-                Vnorm = max(abs(dV), [], 1);
+                V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];
 
-                if (dVmax ~= Inf)
-                    error('Constrained L1 rendezvous problem are not implemented yet.')
-                end
-    
-                if (dVmin > 0)
+                if ( any(dVmax ~= Inf) || any(dVmin > 0) )
                     error('Constrained L1 rendezvous problem are not implemented yet.')
                 end
     
             case 'L2'
-                Vnorm = sqrt(dot(dV, dV, 1));                   % L2 norm
+                Vnorm = sqrt(dot(dV, dV, 1));             % L2 norm
                 
                 % Final dynamic matrix
                 M = Phi(:,end-m+1:end);
@@ -137,18 +139,20 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
 
                 qf = ones(N,1);
 
-                [qf, U, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
+                [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
+                D2 = diag(D2).';
+                D1 = diag(D1).';
 
                 % Initial setup
-                u = U(1:m,:);
-                con_vector = zeros(m,1);                  % Constraint vector
-                Vnorm = Vnorm / D2;                   % Equilibration of the initial sequence
+                u = A(1:m,:);
+                con_vector = zeros(m,1);   % Constraint vector
+                Vnorm = Vnorm ./ D2;       % Equilibration of the initial sequence
                 V = Vnorm;
 
                 if (any(dVmax ~= Inf))
                     
                     % Equilibration of the bounds
-                    dVmax = dVmax * D1(m+1:m+N, m+1:m+N).';
+                    dVmax = dVmax .* D1(1, m+1:m+N);
 
                     if (any(Vnorm > dVmax))
                         error('Pruner cannot continue. Infeasible initial solution detected.')
@@ -162,7 +166,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 if (any(dVmin > 0))
 
                     % Equilibration of the bounds
-                    dVmin = dVmin * D1(m+N+1:m+2*N, m+N+1:m+2*N).';
+                    dVmin = dVmin .* D1(1, m+N+1:m+2*N);
 
                     if (any(Vnorm < dVmin))
                          error('Pruner cannot continue. Infeasible initial solution detected.')
@@ -174,7 +178,6 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
         
             case 'L1'
                 error('Constrained Linfty rendezvous is not yet implemented');
-                V = max(abs(sequence(1:n,:)), [], 1);
         end
 
         % Prune the sequence
@@ -183,7 +186,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
             null_flag = true;
 
             switch (p)
-                case 'L1'
+                case 'L1'                    
                     idx = logical( kron(index, ones(1,n)) );
                     
                 case 'L2'
@@ -191,9 +194,9 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
 
                 otherwise
             end
-
+           
             while (null_flag)
-                [V(:,index), cost, null_flag] = sequence_reduction(m, n, p, q, u(:,idx), qf, V(:,index), con_vector, dVmax(:,index), dVmin(:,index));
+                [V(:,index), cost, null_flag] = sequence_reduction(m, n, p, q, u(:,idx), qf(idx,1), V(:,index), con_vector, dVmax(:,index), dVmin(:,index));
             end
 
         end
@@ -203,16 +206,21 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
             case 'L2'
                 u = dV; 
                 u(:,Idx) = u(:,Idx) ./ sqrt(dot(dV(:,Idx), dV(:,Idx), 1));
-                dV = (V(1,:) * D2') .* u; 
+                dV = (V(1,:) .* D2) .* u; 
 
             case 'L1'
+
+                X(:,1) = reshape(V(1:n,:), 1, n*N) .* D2(1, 1:n*N);
+                X(:,2) = reshape(V(n+1:2*n,:), 1, n*N) .* D2(1, n*N+1:2*n*N);
+                V = [reshape(X(:,1), n, N); reshape(X(:,2), n, N)];
                 dV = V(1:n,:) - V(n+1:2*n,:);
-                dV = D2 * reshape(dV, n * N, 1);
-                dV = reshape(dV, n, N);
 
             case 'Linfty'
         end
     end
+
+    % Clear persistent variables 
+    clear PVT_pruner;
 end
 
 %% Auxiliary functions 
@@ -269,8 +277,9 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
             if (null_flag)    
                 % Feasible impulses, non-vertex
-                U = [u -u];                         % Considered subset of the sequence
-    
+                U = [u -u];
+                qf = [qf; qf];
+
                 if (size(x,1) > 2 * n)
                 else
                     X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2 * n,:), 1, [])];
@@ -286,7 +295,6 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                     Indx = Indx & x(end,:) ~= 0;
                 end
     
-                N = sum(Indx);                          % Number of non-zero variables
                 U = U(:,Indx);                          % Considered subset of the sequence
                 qf = qf(Indx,1).';                      % Cost function
                 V = X(Indx);                            % Get all the variables in a row
@@ -296,15 +304,41 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
     end
 
     if (null_flag)
+       % Update of the SVD
+%         persistent svd_set
+%         persistent S
+%         persistent R
+%         persistent L
+% 
+%         if isempty(svd_set)
+%             [L, S, R] = svd(U);
+%             svd_set = false;
+%         else
+%             % Rank 1 update 
+%             R = [R; zeros(1,size(R,2))];
+%             b = [zeros(1,size(R,2)) 1].';
+%             [L1, S1, R1] = Solvers.Brand_SVD(L, S, R, U(:,end), b);
+% 
+%             [L,S,R] = svd(U);
+% %             norm(R-R1)
+% %             norm(L1-L)
+% %             norm(S1-S)
+%         end
+
         % Compute the coordinate vector associated to a null impulse
+        [L, S, R] = svd(U);
         e = U \ lambda;
-        v = null(U);
+        v = R(:, sum(S,1) == 0);
+        v = v ./ sqrt(dot(v,v,1));
+        
         c = ones(size(v,2),1);
         alpha = (e + v * c).';
-
-        Alpha = dot( qf, alpha );             % New cost function
-        if (Alpha < 0)
-            alpha = -alpha;                 % Ensure feasibility of the solution in the unconstrained case
+        
+        if (sum(lambda) == 0)
+            Alpha = dot( qf, alpha );           % New cost function
+            if (Alpha < 0)
+                alpha = -alpha;                 % Ensure feasibility of the solution in the unconstrained case
+            end
         end
     
         % Update the impulse sequence 
@@ -313,6 +347,20 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
         if (beta_r > 0)
             mu = 1 - beta_r ./ beta;            % New sequence magnitudes
+
+%             if (any(mu == 0))
+%                 idc = mu == 0;
+%                 for i = 1:length(mu)
+%                     % Rank 1 update 
+%                     if (idc(i))
+%                         b =  [repmat(0, 1, i-1) 1 repmat(0, 1, size(R,2)-i)];
+%                         [L, S, R] = Solvers.Brand_SVD(L, S, R, -U(:,i), b.');
+%                         L = L(:,~b);
+%                         S = S(~b, ~b);
+%                         R = R(~b,~b);
+%                     end
+%                 end
+%             end
             
             % New sequence and slack variables
             switch (q)
