@@ -20,13 +20,17 @@
 % New versions: 
 
 %% Functions
-function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
+function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
     % Constants 
     m = size(Phi,1);                              % Dimension of the state space
     n = size(dV,1);                               % Dimension of the control space
     N = size(dV,2);                               % Length of the sequence
 
     % Sanity checks
+    if (~exist('equil_flag', 'var'))
+        equil_flag = false;
+    end
+
     if (~exist('dVmax', 'var'))
         dVmax = Inf * ones(1,N);
     elseif (dVmax <= 0)
@@ -85,31 +89,76 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                     u(:,1 + n * (i-1) : n * i) = R;
                 end
 
+                A = u;
+
+                if (any(dVmax ~= Inf) || any(dVmin > 0))       
+                    A = [A zeros(m,N); ...                       % Dynamics
+                         +eye(n*N) -kron(eye(N),ones(n,1));      % Epigraph form
+                         -eye(n*N) -kron(eye(N),ones(n,1));      % Epigraph form
+                         ]; 
+
+                    if (any(dVmax ~= Inf))
+                        A = [A; [zeros(N, n * N) eye(N)] ];
+                    end
+
+                    if (any(dVmin > 0))
+                        A = [A; [zeros(N, n * N) -eye(N)] ];
+                    end
+                end
+
                 % Equilibration
-                A = [u -u];
-                qf = ones(2 * n * N,1);
-                [qf, A, ~, ~, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, 'R');
-                D2 = diag(D2).';
+                if (equil_flag)
+                    [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-6, 'R');
+                    D2 = diag(D2).';
+                    D1 = diag(D1).';
+                else
+                    D2 = ones(1, n * N);
+                    D1 = ones(1, size(A,1));
+                end
                 
                 % Initial setup
-                u = A(1:m,1:n*N);
-                qf = qf(1:n*N,1);
+                u = A(1:m,:);
                 con_vector = zeros(m,1);
 
                 % Basis pursuit formulation
-                B = reshape(dV, n * N, 1);
+                B = reshape(dV, 1, n * N) ./ D2(1,:);
 
                 V = zeros(2, size(B,1));
-                V(1, B > 0) = +B(B > 0,1).';
-                V(2, B < 0) = -B(B < 0,1).';
-
-                V(1,:) = V(1,:) ./ D2(1,1:n*N) ;
-                V(2,:) = V(2,:) ./ D2(1, n*N+1:2*n*N);
+                V(1, B > 0) = +B(B > 0);
+                V(2, B < 0) = -B(B < 0);
 
                 V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];
+                Vnorm = max(abs( reshape(B, n, N) ), [], 1);
 
-                if ( any(dVmax ~= Inf) || any(dVmin > 0) )
-                    error('Constrained L1 rendezvous problem are not implemented yet.')
+                if (any(dVmax ~= Inf))
+                    
+                    % Equilibration of the bounds
+                    dVmax = dVmax .* D1(1, m+2*n*N+1:m+2*n*N+N);
+
+                    if (any(Vnorm > dVmax))
+                        error('Pruner cannot continue. Infeasible initial solution detected.')
+                    else
+
+                        V = [V(1:2*n,:); ...    % Solutions
+                             +Vnorm; ...        % Epigraph form
+                             +Vnorm; ...        % Epigraph form
+                             dVmax - Vnorm];    % Slack
+                    end
+                end
+    
+                if (any(dVmin > 0))
+
+                    % Equilibration of the bounds
+                    dVmin = dVmin .* D1(1, end-N+1:end);
+
+                    if (any(Vnorm < dVmin))
+                         error('Pruner cannot continue. Infeasible initial solution detected.')
+                    else
+                        V = [V; ...
+                             +Vnorm; ...        % Epigraph form
+                             +Vnorm; ...        % Epigraph form
+                             Vnorm - dVmin];    % Slack
+                    end
                 end
     
             case 'L2'
@@ -138,10 +187,16 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 end
 
                 qf = ones(N,1);
-
-                [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
-                D2 = diag(D2).';
-                D1 = diag(D1).';
+                
+                % Equilibration
+                if (equil_flag)
+                    [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
+                    D2 = diag(D2).';
+                    D1 = diag(D1).';
+                else
+                    D2 = ones(1,N);
+                    D1 = ones(1,size(A,1));
+                end
 
                 % Initial setup
                 u = A(1:m,:);
@@ -166,7 +221,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 if (any(dVmin > 0))
 
                     % Equilibration of the bounds
-                    dVmin = dVmin .* D1(1, m+N+1:m+2*N);
+                    dVmin = dVmin .* D1(1, end-N+1:end);
 
                     if (any(Vnorm < dVmin))
                          error('Pruner cannot continue. Infeasible initial solution detected.')
@@ -209,11 +264,9 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p)
                 dV = (V(1,:) .* D2) .* u; 
 
             case 'L1'
-
-                X(:,1) = reshape(V(1:n,:), 1, n*N) .* D2(1, 1:n*N);
-                X(:,2) = reshape(V(n+1:2*n,:), 1, n*N) .* D2(1, n*N+1:2*n*N);
-                V = [reshape(X(:,1), n, N); reshape(X(:,2), n, N)];
                 dV = V(1:n,:) - V(n+1:2*n,:);
+                dV = reshape(dV, 1, n*N) .* D2(1,:);
+                dV = reshape(dV, n, N);
 
             case 'Linfty'
         end
@@ -252,13 +305,13 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
             % Assemble the constraint matrix 
             dim = size(x,1);
-            if (dim >= 2)
+            if any(xmax ~= Inf)
                 U = [U zeros(m, N); eye(N) eye(N)]; % Complete matrix
                 lambda = [lambda; xmax];            % Complete independent term
                 qf = [qf zeros(1,N)];               % Complete cost function
             end
     
-            if (dim == 3)
+            if any(xmin > 0)
                 if (dim > 2)
                     U = [U zeros(size(U,1), N); eye(N) zeros(N) -eye(N)];
                 else
@@ -305,11 +358,11 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
     if (null_flag)
        % Update of the SVD
-%         persistent svd_set
-%         persistent S
-%         persistent R
-%         persistent L
-% 
+        persistent svd_set
+        persistent S
+        persistent R
+        persistent L
+
 %         if isempty(svd_set)
 %             [L, S, R] = svd(U);
 %             svd_set = false;
@@ -319,10 +372,10 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 %             b = [zeros(1,size(R,2)) 1].';
 %             [L1, S1, R1] = Solvers.Brand_SVD(L, S, R, U(:,end), b);
 % 
-%             [L,S,R] = svd(U);
-% %             norm(R-R1)
-% %             norm(L1-L)
-% %             norm(S1-S)
+%             [L, S, R] = svd(U);
+%             norm(R-R1)
+%             norm(L1-L)
+%             norm(S1-S)
 %         end
 
         % Compute the coordinate vector associated to a null impulse

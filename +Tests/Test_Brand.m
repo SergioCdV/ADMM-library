@@ -6,7 +6,8 @@
 % Validated: 
 
 %% Test exercise %% 
-% Update an SVD through Brand's method% 
+% Update an SVD through Brand's method % 
+clear all;
 
 %% Input data
 m = 2;
@@ -24,18 +25,17 @@ A = A + a*b.';
 
 %% Compare the SVD decompositions
 % Direct SVD
-[S1,V1,D1] = svd(A); 
+A = [A a];
+[S1,V1,D1] = svds(A); 
 
 % Updated SVD 
-[S2,V2,D2] = Solvers.Brand_SVD(U,S,V,a,b);
+[S2,V2,D2] = Solvers.Brand_SVD(U, S, [V; zeros(1,size(V,2))], a, [zeros(1,size(V,2)) 1].');
 
+%% Results
 Ar = S2*V2*D2.';
 error = norm(Ar-A,"fro");
-
 norm(D2 * D2.')
 norm(S2 * S2.')
-
-
 
 
 

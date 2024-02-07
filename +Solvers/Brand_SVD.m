@@ -11,49 +11,42 @@
 
 function [U, S, V] = Brand_SVD(U, S, V, a, b)
     % Initilization 
+    r = size(U,2);
+    
     m = U.' * a; 
     c = U * m;
     p = a - c; 
-    p_norm = norm(p);
-
+    
+    p_norm = sqrt( dot(p,p) );
     if (p_norm > 0)
-        P = p / p_norm;
-        p_flag = true;
+        P = orth(p);
     else
-        P = zeros(size(p));
-        p_flag = false;
+        P = p;
     end
 
     n = V.' * b; 
     d = V * n;
     q = b - d; 
-    q_norm = norm(q);
+    q_norm = sqrt( dot(q,q) );
 
     if (q_norm > 0)
-        Q = q / q_norm;
-        q_flag = true;
+        Q = orth(q);
     else
-        Q = zeros(size(q));
-        q_flag = false;
+        Q = q;
     end
 
     % Main process
-    K = [S zeros(size(S,1),1); zeros(1,size(S,2)) 0] + [m; p_norm]*[n; q_norm].';
-    [Up, S, Vp] = svd(K, 'econ');
+    K = [S zeros(size(S,1),1); zeros(1,size(m,1)) 0] + [m * n.' q_norm * m; p_norm * n.' q_norm * p_norm];
+    [Up, S, Vp] = svds(K,r);
     
-    % Final update
-    if (1)
-        U = [U P] * Up; 
-    else
-        U = U * Up(1:end-1,1:end-1);
-        S = S(1:1:end-1,:);
+    U = [U P] * Up;
+    V = [V Q] * Vp;
+
+    if (p_norm == 0)
+        U = U(:,1:end-1);
     end
 
-    if (1)
-        V = [V Q] * Vp; 
-    else
-        V = Vp(:,1:end-1);
-        S = S(:,1:end-1);
+    if (q_norm == 0)
+        V = V(:,1:end-1);
     end
-    
 end
