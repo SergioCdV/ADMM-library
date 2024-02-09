@@ -34,6 +34,7 @@ classdef GenPotterSolver < RendezvousProblems.SolverRendezvous
 
     methods (Static)
         [dV, cost] = PVT_pruner(Phi, B, dV, dVmin, dVmax, p);
+        [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda, xmax, xmin);
     end
 
 end
