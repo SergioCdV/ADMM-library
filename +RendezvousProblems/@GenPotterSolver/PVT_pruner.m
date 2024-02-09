@@ -106,6 +106,8 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                     end
                 end
 
+                qf = ones(n * N,1);
+
                 % Equilibration
                 if (equil_flag)
                     [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-6, 'R');
@@ -292,7 +294,6 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
             if (any(xmin > 0))
                 Indx = Indx & x(1,:) > xmin; 
-                Indx = Indx & x(end,:) ~= 0;
                 xmin = xmin.';
             end
 
@@ -334,23 +335,52 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                 qf = [qf; qf];
 
                 if (size(x,1) > 2 * n)
+                    X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2 * n,:), 1, []); 
+                        [x(2*n+1:end,:) ones(size(x,1)-2*n, 2 * n * N - size(x,2))]];
                 else
                     X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2 * n,:), 1, [])];
                 end
                 Indx = X(1,:) ~= 0;
     
                 if (xmax ~= Inf)
-                    Indx = Indx & x(2,:) ~= 0;
+                    Indx = Indx & repmat( kron(x(2*n+3,:) < xmax, ones(1,n)), 1, 2);
                 end
     
                 if (xmin > 0)
-                    Indx = Indx & x(1,:) > xmin; 
-                    Indx = Indx & x(end,:) ~= 0;
+                    Indx = Indx & repmat( kron(x(2*n+3,:) > xmin, ones(1,n)), 1, 2); 
+                    Indx = Indx & repmat( kron(x(end,:) ~= 0, ones(1,n)), 1, 2);
                 end
     
                 U = U(:,Indx);                          % Considered subset of the sequence
                 qf = qf(Indx,1).';                      % Cost function
-                V = X(Indx);                            % Get all the variables in a row
+                N = sum(Indx);
+                
+                % Assemble the constraint matrix 
+                dim = size(x,1);
+                if any(xmax ~= Inf)
+                    U = [U zeros(m, 2*N); 
+                        +eye(n*N) -eye(n*N) -kron([eye(N) zeros(N)],ones(n,1));
+                        -eye(n*N) +eye(n*N) -kron([eye(N) zeros(N)],ones(n,1));
+                         zeros(N, 2 * n * N) eye(N) eye(N)];                      % Complete matrix
+
+                    lambda = [lambda; zeros(2 * n * N,1); xmax];            % Complete independent term
+                    qf = [qf zeros(1,N)];                                   % Complete cost function
+                end
+    
+                if any(xmin > 0)
+                    if (dim > 2 * n)
+                        U = [U zeros(size(U,1), N); eye(N) zeros(N) -eye(N)];
+                    else
+                        U = [U zeros(m, N); 
+                            +eye(n*N) -eye(n*N) -kron(eye(N),ones(n,1));
+                            -eye(n*N) +eye(n*N) -kron(eye(N),ones(n,1));
+                            zeros(N, 2 * n * N) eye(N) -eye(N)];            % Complete matrix
+                    end
+
+                    lambda = [lambda; xmin];
+                    qf = [qf zeros(1,N)];
+                end
+
             end
             
         otherwise
@@ -380,7 +410,8 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
         % Compute the coordinate vector associated to a null impulse
         [L, S, R] = svd(U);
-        e = U \ lambda;
+        [Lb, Ub] = updateLU(U,2);
+        e = LUsolve(Lb, Ub, lambda);
         v = R(:, sum(S,1) == 0);
         v = v ./ sqrt(dot(v,v,1));
         
@@ -451,4 +482,10 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
     % Final cost
     cost = sum(cost);
+end
+
+%% Auxiliart functions 
+function [x] = LUsolve(L,U,b)
+    y = L\b;
+    x = U\y;
 end
