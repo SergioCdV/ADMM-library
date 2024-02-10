@@ -1,6 +1,6 @@
 
 
-function [L, U, stable_flag] = Bennett_update(L, U, u, v, A)
+function [L, U, stable_flag] = Bennett_update(L, U, u, v)
     % Constants 
     m = size(U,1);
     M = size(U,2);
@@ -26,10 +26,5 @@ function [L, U, stable_flag] = Bennett_update(L, U, u, v, A)
             stable_flag = false;
             break; 
         end
-    end
-
-    % Re-compute LU in case of instability 
-    if (~stable_flag)
-        [L, U, ~] = lu(A);
     end
 end

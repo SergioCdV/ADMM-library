@@ -107,11 +107,11 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                         idx(1 + n*(j-1):n*j) = n * [index(j) index(j) index(j)] - (n-1:-1:0);
                     end
 
-                    if     (size(V,1) == 2*n + 3)
-                        idx = [idx, idx + n * N, index + 2 * n * N, index + 2 * n * N + N, index + 2 * n * N + 2 * N];
+                    if     (size(V,1) == 4*n + 3)
+                        idx = [idx, idx + n * N, index + 2 * n * N, idx + 2 * n * N + N, idx + 3 * n * N + N, index + 4 * n * N + N, index + 4 * n * N + 2 * N];
 
-                    elseif (size(V,1) == 2*n + 2)
-                        idx = [idx, idx + n * N, index + 2 * n * N, index + 2 * n * N + N];
+                    elseif (size(V,1) == 4*n + 2)
+                        idx = [idx, idx + n * N, index + 2 * n * N, idx + 2 * n * N + N, idx + 3 * n * N + N, index + 4 * n * N + N];
 
                     else
                         idx = [idx, idx + n * N];
@@ -325,18 +325,18 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
 
             V = [V; ...
                  +Vnorm; ...                        % Epigraph form
-                 +Vnorm - dV; ...                   % Epigraph slacks
-                 +Vnorm + dV; ...                   % Epigraph slacks
-                 +Vnorm - dVmin];                   % Slack
+                 +0*Vnorm - 0*dV; ...                   % Epigraph slacks
+                 +0*Vnorm + 0*dV; ...                   % Epigraph slacks
+                 +dVmax - Vnorm];                   % Slack
             
             % Assemble the constraint matrix
-            A = [A zeros(m, 2*N+2*n*N); 
+            A = [A zeros(m, N+2*n*N+N); 
                  +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
                  -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
                   zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) eye(N)];         
 
             b = [b; zeros(2 * n * N,1); dVmax.'];                           % Complete independent term
-            qf = [qf; zeros(2*n*N+2*N,1)];                                  % Complete cost function
+            qf = [qf; zeros(N+2*n*N+N,1)];                                  % Complete cost function
         end
     end
 
@@ -359,7 +359,7 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
                 V = [V; ...
                     Vnorm - dVmin];    % Slack
             else
-                A = [A zeros(m, 2*N+2*n*N); 
+                A = [A zeros(m, N+2*n*N+N); 
                      +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
                      -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
                       zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) -eye(N)];     
