@@ -15,7 +15,7 @@ n = 40;
 A = rand(m,n);
 
 %% Perturb the matrix 
-a = rand(m,1);
+u = rand(m,1);
 p = 2;
 
 %% Compare the LU decompositions
@@ -24,15 +24,15 @@ p = 2;
 A = A(P,:);
 [L, U, ~] = lu(A);
 
-A(:,p) = a;
+A(:,p) = u;
 
 % Update 
-[L2, U2] = Solvers.FT_update(L, U, a, p);
+[L2, U2] = Solvers.FT_update(L, U, u, p);
 
 %% Check the nullspace 
 % Generate a rank-defficient matrix
-m = 2;
-n = 3;
+m = 40;
+n = 30;
 A = rand(m, 2*n+1); 
 
 % Direct nullspace through SVD
@@ -51,10 +51,21 @@ x = ones(size(N,2),1);
 
 norm( A * N2 * x)
 
+% Pertub the matrix 
+u = rand(m,1);
+v = rand(2*n+1,1);
+
+A = A + u*v.'; 
+
+% Update the computed nullspace
+[L, U] = Solvers.Bennett_update(L, U, u, v, A);
+N3 = [-U(:,1:m) \ U(:,m+1:end); eye(d)];
+norm( A * N3 * x)
+
 %% Solve linear system 
 % Problem data
 A = rand(m,m);
-b = rand(m,1);
+v = rand(m,1);
 
 % LU factorization
 [~, ~, P] = lu(A, 'vector');
@@ -62,10 +73,10 @@ A = A(P,:);
 [L, U, ~] = lu(A);
 
 % Solve the system
-x = LUsolve(L,U,b);
+x = LUsolve(L,U,v);
 
 % Results
-norm(b - A * x);
+norm(v - A * x);
 
 %% Auxiliary functions 
 % Solve a linear system using LU
