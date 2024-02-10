@@ -89,7 +89,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
     
             case 'L2'
                 % L2 problem
-                [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, 1);
+                [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag);
         
             case 'L1'
                 error('Constrained Linfty rendezvous is not yet implemented');
@@ -323,20 +323,18 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
             error('Pruner cannot continue. Infeasible initial solution detected.')
         else
 
-            V = [V; ...
-                 +Vnorm; ...                        % Epigraph form
-                 +Vnorm - dV; ...                   % Epigraph slacks
-                 +Vnorm + dV; ...                   % Epigraph slacks
-                 +Vnorm - dVmin];                   % Slack
+            V = [V(1:2*n,:); ...    % Solutions
+                 +Vnorm; ...        % Epigraph form
+                 dVmax - Vnorm];    % Slack
             
             % Assemble the constraint matrix
-            A = [A zeros(m, 2*N+2*n*N); 
+            A = [A zeros(m, 2*N); 
                  +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
                  -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
                   zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) eye(N)];         
 
             b = [b; zeros(2 * n * N,1); dVmax.'];                           % Complete independent term
-            qf = [qf; zeros(2*n*N+2*N,1)];                                  % Complete cost function
+            qf = [qf; zeros(2*N+2*n*N,1)];                                  % Complete cost function
         end
     end
 
@@ -353,29 +351,28 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
         
             % Complete matrix
             if (dim > 2 * n)
-                A = [A zeros(size(A,1), N); 
-                     zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N + N) -eye(N)];
+                A = [A zeros(size(A,1), N); zeros(N, 2 * n * N) eye(N) zeros(N) -eye(N)];
                 
                 V = [V; ...
                     Vnorm - dVmin];    % Slack
             else
-                A = [A zeros(m, 2*N+2*n*N); 
+                A = [A zeros(m, 2*N); 
                      +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
                      -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
                       zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) -eye(N)];     
 
                 V = [V; ...
                      +Vnorm; ...                        % Epigraph form
-                     +Vnorm - dV; ...                   % Epigraph slacks
-                     +Vnorm + dV; ...                   % Epigraph slacks
+                     +Vnorm - sum(); ...
+                     -Vnorm - sum(); ...
                      +Vnorm - dVmin];                   % Slack
 
                 b = [b; zeros(2 * n * N,1)];            % Augment the independent term in case it has not been done yet
-                qf = [qf; zeros(2*n*N+N,1)];            % Complete cost function
+                qf = [qf; zeros(2*n*N,1)];              % Complete cost function
             end
 
             b = [b; dVmin.'];                           % Complete independent term
-            qf = [qf; zeros(N,1)];                      % Complete cost function
+            qf = [qf; zeros(2*N,1)];                    % Complete cost function
         end
     end
 end
