@@ -8,13 +8,13 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
             % Add the constraints
             if (any(xmax ~= Inf))
                 Indx = Indx & x(1,:) < xmax;
-                Indx = Indx & x(2,:) ~= 0;
+                Indx = Indx & x(2,:) > 0;
                 con = con + 1;
             end
 
             if (any(xmin > 0))
                 Indx = Indx & x(1,:) > xmin;
-                Indx = Indx & x(end,:) ~= 0;
+                Indx = Indx & x(end,:) > 0;
                 con = con + 2;
             end
 
@@ -50,93 +50,93 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                     lambda = lambda(idx2,1);             % Independent term
             end
 
-        case 'Linfty'
-            Indx = sum(x(1:2*n,:)) ~= 0;
-            N = sum(Indx);                          % Number of non-zero impulses
-            null_flag = N > m;                      % Flag to indicate if the sequence is reducible
-
-            if (null_flag)    
-                con = 0;
-                N = size(x,2);
-
-                if (size(x,1) > 2 * n)
-                    X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2*n,:), 1, []); 
-                        [x(2*n+1,:) ones(1, (2 * n - 1) * N)]
-                        [reshape(x(2*n+2:3*n+1,:), 1, []) reshape(x(3*n+2:4*n+1,:), 1, [])]
-                        [x(4*n+2:end,:) ones(size(x,1)-4*n-1, (2 * n - 1) * N)]
-                        ];
-                else
-                    X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2 * n,:), 1, [])];
-                end
-                Indx = X(1,:) ~= 0;
+        case 'Linfty'  
+            con = 0;
+            N = size(x,2);
     
-                if (any(xmax ~= Inf))
-                    Indx = Indx & repmat( kron(x(2*n+1,:) < xmax, ones(1,n)), 1, 2);
-                    Indx = Indx & repmat( kron(x(4*n+2,:) ~= 0, ones(1,n)), 1, 2);
-                    con = con + 1;
-                end
-    
-                if (any(xmin > 0))
-                    Indx = Indx & repmat( kron(x(2*n+1,:) > xmin, ones(1,n)), 1, 2); 
-                    Indx = Indx & repmat( kron(x(end,:) ~= 0, ones(1,n)), 1, 2);
-                    con = con + 2;
-                end
-
-                % Reduce the linear problem
-                switch (con)
-                    case 0
-                        % General selection of equations
-                        U = u(:,Indx);                       % Considered subset of the sequence
-                        qf = qf(Indx,1).';                   % Cost function
-                        V = X(1,Indx);                       % Get all the variables in a row
-    
-                    case 3
-                        num_imp = (size(lambda,1) - m) / (2 + 2*n);
-
-                        % Selection of equations
-                        inf_idx = logical( sum( x(1:n,:) - x(n+1:2*n,:), 1) );
-                        con_idx = logical( kron(inf_idx, ones(1,n)));%Indx(1,1:size(X,2)/2) | Indx(1,size(X,2)/2+1:end) );
-                                              
-                        idx2 = logical( [ones(m,1); ...
-                                         repmat([con_idx zeros(1,n*num_imp-size(X,2)/2)], 1, 2).'; ...
-                                         [inf_idx.'; zeros(num_imp-length(inf_idx),1)]; ...
-                                         [inf_idx.'; zeros(num_imp-length(inf_idx),1)] ...
-                                         ] );
-    
-                        % Selection of variables
-                        con_idx = repmat(con_idx,1,2);
-                        idx1 = logical( [Indx inf_idx con_idx inf_idx inf_idx] );
-                        V = [X(1,Indx) X(2,inf_idx) X(3,con_idx) X(4,inf_idx) X(5,inf_idx)];
-
-                        U = u(idx2,idx1);                    % Considered subset of the sequence
-                        qf = qf(idx1,1).';                   % Cost function
-                        lambda = lambda(idx2,1);             % Independent term
-
-                    otherwise
-                        % General selection of equations
-                        num_imp = (size(lambda,1) - m) / (1 + 2*n);
-
-                        % Selection of equations
-                        inf_idx = logical( sum( x(1:n,:) - x(n+1:2*n,:), 1) );
-                        con_idx = logical( kron(inf_idx, ones(1,n)));%Indx(1,1:size(X,2)/2) | Indx(1,size(X,2)/2+1:end) );
-                                              
-                        idx2 = logical( [ones(m,1); ...
-                                         repmat([con_idx zeros(1,n*num_imp-size(X,2)/2)], 1, 2).'; ...
-                                         [inf_idx.'; zeros(num_imp-length(inf_idx),1)] ...
-                                         ] );
-                        
-                        % Selection of variables
-                        con_idx = repmat(con_idx,1,2);
-                        idx1 = logical( [Indx inf_idx con_idx inf_idx] );
-                        V = [X(1,Indx) X(2,inf_idx) X(3,con_idx) X(4,inf_idx)];
-
-                        U = u(idx2,idx1);                    % Considered subset of the sequence
-                        qf = qf(idx1,1).';                   % Cost function
-                        lambda = lambda(idx2,1);             % Independent term
-                end
+            if (size(x,1) > 2 * n)
+                X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2*n,:), 1, []); 
+                    [x(2*n+1,:) ones(1, (2 * n - 1) * N)]
+                    [reshape(x(2*n+2:3*n+1,:), 1, []) reshape(x(3*n+2:4*n+1,:), 1, [])]
+                    [x(4*n+2:end,:) ones(size(x,1)-4*n-1, (2 * n - 1) * N)]
+                    ];
+            else
+                X = [reshape(x(1:n,:), 1, []) reshape(x(n+1:2 * n,:), 1, [])];
             end
-            
-        otherwise
+    
+            % NZ impulses
+            Indx = X(1,:) ~= 0;
+    
+            % Saturated impulses
+            inf_idx = logical( sum( x(1:n,:) - x(n+1:2*n,:), 1) );
+    
+            if (any(xmax ~= Inf))
+                inf_idx = inf_idx & x(2*n+1,:) < xmax;
+                inf_idx = inf_idx & x(4*n+2,:) > 0;
+                con = con + 1;
+            end
+    
+            if (any(xmin > 0))
+                inf_idx = inf_idx & x(2*n+1,:) > xmin;
+                inf_idx = inf_idx & x(end,:) > 0;
+                con = con + 2;
+            end
+    
+            null_flag = sum(inf_idx) > m;                % Flag to indicate if the sequence is reducible
+    
+            % Reduce the linear problem
+            switch (con)
+                case 0
+                    % General selection of equations
+                    U = u(:,Indx);                       % Considered subset of the sequence
+                    qf = qf(Indx,1).';                   % Cost function
+                    V = X(1,Indx);                       % Get all the variables in a row
+    
+                case 3
+                    % General selection of equations
+                    num_imp = (size(lambda,1) - m) / (2 + 2*n);
+                                                  
+                    % Pruning of constraints
+                    con_idx = logical( kron(inf_idx, ones(1,n)) );
+
+                    % Selection of variables
+                    conv_idx = repmat(con_idx,1,2) & X(3,:) > 0;
+                    idx1 = logical( [Indx inf_idx conv_idx inf_idx inf_idx] );
+                    V = [X(1,Indx) X(2,inf_idx) X(3,conv_idx) X(4,inf_idx) X(5,inf_idx)];
+                        
+                    % Selection of equations
+                    idx2 = logical( [ones(m,1); ...
+                                     repmat([con_idx zeros(1,n*num_imp-size(X,2)/2)].', 2, 1); ...
+                                     [inf_idx.'; zeros(num_imp-length(inf_idx),1)]; ...
+                                     [inf_idx.'; zeros(num_imp-length(inf_idx),1)] ...
+                                     ] );
+
+                    U = u(idx2,idx1);                    % Considered subset of the sequence
+                    qf = qf(idx1,1).';                   % Cost function
+                    lambda = lambda(idx2,1);             % Independent term
+    
+                otherwise
+                    % General selection of equations
+                    num_imp = (size(lambda,1) - m) / (1 + 2 * n);
+    
+                    % Pruning of constraints
+                    con_idx = logical( kron(inf_idx, ones(1,n)) );
+
+                    % Selection of variables
+                    conv_idx = repmat(con_idx,1,2) & X(3,:) > 0;
+                    idx1 = logical( [Indx inf_idx conv_idx inf_idx] );
+                    V = [X(1,Indx) X(2,inf_idx) X(3,conv_idx) X(4,inf_idx)];
+                       
+                    % Selection of equations
+                    idx2 = logical( [ones(m,1); ...
+                                     repmat([con_idx zeros(1,n*num_imp-size(X,2)/2)].', 2, 1); ...
+                                     [inf_idx.'; zeros(num_imp-length(inf_idx),1)] ...
+                                     ] );
+
+                    U = u(idx2,idx1);                    % Considered subset of the sequence
+                    qf = qf(idx1,1).';                   % Cost function
+                    lambda = lambda(idx2,1);             % Independent term
+            end
     end
 
     if (null_flag)
@@ -185,17 +185,24 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                         dim = sum(inf_idx);
                         X(1,Indx) = V(1,1:sum(Indx));
                         X(2,inf_idx) = V(1,sum(Indx)+1:sum(Indx)+dim);
-                        X(3,con_idx) = V(1,sum(Indx)+dim+1:sum(Indx)+dim+sum(con_idx));
-                        X(4:end,inf_idx) = reshape(V(1,sum(Indx)+dim+sum(con_idx)+1:end), [], dim);
+                        X(3,conv_idx) = V(1,sum(Indx)+dim+1:sum(Indx)+dim+sum(conv_idx));
+                        X(4:end,inf_idx) = reshape(V(1,sum(Indx)+dim+sum(conv_idx)+1:end), [], dim);
 
                         len = size(X,2)/2;
-                        x = [reshape(X(1,1:len), n, []);               % Positive side
-                             reshape(X(1,len+1:end), n, []);           % Negative side
-                             X(2,1:length(inf_idx))                    % Infinity norm
-                             reshape(X(3,1:len), n, []);               % Positive side slacks
-                             reshape(X(3,len+1:end), n, []);           % Negative side slacks
-                             X(4:end,1:length(inf_idx))                % Infinity norm slacks
-                             ];
+                        dim = length(inf_idx);
+                        
+                        x(1:n,:) = reshape(X(1,1:len), n, []);              % Positive side
+                        x(n+1:2*n,:) = reshape(X(1,len+1:end), n, []);      % Negative side
+
+                        % Re-compute slack variables
+                        qnorm = repmat(X(2,1:dim), n, 1);
+                        dq = [reshape(qnorm - x(1:n,:) + x(n+1:2*n,:), 1, []) reshape(qnorm + x(1:n,:) - x(n+1:2*n,:), 1, [])];
+                        X(3,~conv_idx) = dq(1,~conv_idx);
+
+                        x(2*n+1,:) = X(2,1:dim);                            % Infinity norm
+                        x(2*n+2:3*n+1,:) = reshape(X(3,1:len), n, []);      % Positive side slacks
+                        x(3*n+2:4*n+1,:) = reshape(X(3,len+1:end), n, []);  % Negative side slacks
+                        x(4*n+2,:) = X(4:end,1:dim);                        % Infinity norm slacks
                     else
                         dim = size(X,2) / 2;
                         X(:,Indx) = reshape(V, size(X(:,Indx),2), size(X,1)).';

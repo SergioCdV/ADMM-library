@@ -89,7 +89,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
     
             case 'L2'
                 % L2 problem
-                [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, 1);
+                [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag);
         
             case 'L1'
                 error('Constrained Linfty rendezvous is not yet implemented');
@@ -194,7 +194,7 @@ function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     % Equilibration
     if (equil_flag)
         % Ruiz equillibration
-        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-5, false);
+        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-4, false);
         D2 = diag(D2).';
         D1 = diag(D1).';
     else
@@ -325,18 +325,18 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
 
             V = [V; ...
                  +Vnorm; ...                        % Epigraph form
-                 +0*Vnorm - 0*dV; ...                   % Epigraph slacks
-                 +0*Vnorm + 0*dV; ...                   % Epigraph slacks
+                 +Vnorm - dV; ...                   % Epigraph slacks
+                 +Vnorm + dV; ...                   % Epigraph slacks
                  +dVmax - Vnorm];                   % Slack
             
             % Assemble the constraint matrix
             A = [A zeros(m, N+2*n*N+N); 
                  +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
                  -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
-                  zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) eye(N)];         
+                  zeros(N, 2 * n * N) eye(N) zeros(N, 2 * n * N) eye(N)];         
 
-            b = [b; zeros(2 * n * N,1); dVmax.'];                           % Complete independent term
-            qf = [qf; zeros(N+2*n*N+N,1)];                                  % Complete cost function
+            b = [b; zeros(2*n*N,1); dVmax.'];             % Complete independent term
+            qf = [qf; zeros(N+2*n*N+N,1)];                % Complete cost function
         end
     end
 
