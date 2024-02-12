@@ -85,7 +85,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
         switch (q)
             case 'Linfty'
                 % L1 problem
-                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, 1);
+                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, 0);
     
             case 'L2'
                 % L2 problem
@@ -272,24 +272,24 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     b = zeros(m,1);                                  % Independent term
 
     if (any(dVmax ~= Inf) || any(dVmin > 0))       
-        A = [A zeros(m,N); ...                                                  % Dynamics
-             +eye(n*N) -eye(n*N) -kron(eye(N),ones(n,1)) eye(n*N,n*N);          % Epigraph form
-             -eye(n*N) +eye(n*N) -kron(eye(N),ones(n,1)) eye(n*N,n*N);          % Epigraph form
+        A = [A zeros(size(A,1),N+2*n*N); ...                                                   % Dynamics
+             +eye(n*N) -eye(n*N) -kron(eye(N),ones(n,1)) eye(n*N,n*N) zeros(n*N,n*N);          % Epigraph form
+             -eye(n*N) +eye(n*N) -kron(eye(N),ones(n,1)) zeros(n*N,n*N) eye(n*N,n*N);          % Epigraph form
              ]; 
 
         qf = [qf; zeros(N+2*n*N,1)];                                            % Complete cost function
         b = [b; zeros(2*n*N,1)];                                                % Complete cost function
 
         if (any(dVmax ~= Inf))
-            A = [A zeros(size(A,1,N)); repmat([zeros(N,2*n*N) eye(N)],2,1)];    % Upper bound constraint
+            A = [A zeros(size(A,1),N); repmat([zeros(N,2*n*N) eye(N)],1,2)];    % Upper bound constraint
             qf = [qf; zeros(N,1)];                                              % Complete cost function
         end
 
         if (any(dVmin > 0))
             if (any(dVmax ~= Inf))
-                A = [A zeros(size(A,1,N)); zeros(N,2*n*N) eye(N) zeros(N,2*n*N+N) -eye(N)];    % Lower bound constraint
+                A = [A zeros(size(A,1),N); zeros(N,2*n*N) eye(N) zeros(N,2*n*N+N) -eye(N)];    % Lower bound constraint
             else
-                A = [A zeros(size(A,1,N)); repmat([zeros(N,2*n*N) eye(N)],2,1)];               % Lower bound constraint
+                A = [A zeros(size(A,1),N); repmat([zeros(N,2*n*N) eye(N)],1,2)];               % Lower bound constraint
             end
             
             qf = [qf; zeros(N,1)];                                                             % Complete cost function
@@ -300,7 +300,7 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     if (equil_flag)
         [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1E-10, 'L');
     else
-        D2 = ones(1, n * N);
+        D2 = ones(1, size(A,2));
         D1 = ones(1, size(A,1));
     end
 
@@ -308,10 +308,10 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     B = reshape(dV, 1, n * N);
 
     V = zeros(2, size(B,1));
-    V(1, B > 0) = + 2 * B(B > 0);
-    V(2, B > 0) = + 1 * B(B > 0);
-    V(1, B < 0) = - 1 * B(B < 0);
-    V(2, B < 0) = - 2 * B(B < 0);
+    V(1, B > 0) = + 1 * B(B > 0);
+%     V(2, B > 0) = + 0 * B(B > 0);
+%     V(1, B < 0) = - 0 * B(B < 0);
+    V(2, B < 0) = - 1 * B(B < 0);
 
     V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Basis pursuit formulation
     Vnorm = max(abs( reshape(B, n, N) ), [], 1);
@@ -327,8 +327,8 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
             % Equilibration of the initial solution
             V = [V; ...
                  +Vnorm; ...                        % Epigraph form
-                 +Vnorm - dV; ...                   % Epigraph slacks
-                 +Vnorm + dV; ...                   % Epigraph slacks
+                 +1e3*Vnorm - dV; ...                   % Epigraph slacks
+                 +1e3*Vnorm + dV; ...                   % Epigraph slacks
                  +dVmax - Vnorm];                   % Slack
             
             % Complete independent term

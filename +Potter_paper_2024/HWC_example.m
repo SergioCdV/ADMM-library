@@ -32,7 +32,7 @@ n = 1;               % Characteristic frequency
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 250;
+N = 50;
 t = linspace(0, tf, N);
 nu = t;
 
@@ -66,7 +66,7 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                             % Maximum control authority
+dVmax = 10;                                             % Maximum control authority
 
 myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
 
