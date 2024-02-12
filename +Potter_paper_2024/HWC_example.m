@@ -66,9 +66,9 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 10;                                             % Maximum control authority
+dVmax = Inf;                                             % Maximum control authority
 
-myThruster = thruster('L2', dVmin / Vc, dVmax / Vc);
+myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
 
 %% Optimization
 % Define the ADMM problem 

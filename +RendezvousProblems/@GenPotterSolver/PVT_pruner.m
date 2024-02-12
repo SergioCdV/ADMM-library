@@ -85,7 +85,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
         switch (q)
             case 'Linfty'
                 % L1 problem
-                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag);
+                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, 1);
     
             case 'L2'
                 % L2 problem
@@ -145,8 +145,8 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                 dV = ( V(1,:) .* D2(1:N) ) .* u; 
 
             case 'L1'
-                dV = V(1:n,:) - V(n+1:2*n,:);
-                dV = reshape(dV, 1, n*N) .* D2(1,:);
+                dV = reshape(D2(1,1:n*N), n, N) .* V(1:n,:) - reshape(D2(1,n*N+1:2*n*N), n, N) .* V(n+1:2*n,:);
+                dV = reshape(dV, 1, n*N);
                 dV = reshape(dV, n, N);
 
             case 'Linfty'
@@ -267,39 +267,45 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
         u(:,1 + n * (i-1) : n * i) = R;
     end
 
-    A = u;                                           % Constrains matrix
-    qf = ones(n * N,1);                              % Linear cost function
+    A = [u -u];                                      % Constrains matrix
+    qf = ones(2 * n * N,1);                          % Linear cost function
+    b = zeros(m,1);                                  % Independent term
 
     if (any(dVmax ~= Inf) || any(dVmin > 0))       
-        A = [A zeros(m,N); ...                       % Dynamics
-             +eye(n*N) -kron(eye(N),ones(n,1));      % Epigraph form
-             -eye(n*N) -kron(eye(N),ones(n,1));      % Epigraph form
+        A = [A zeros(m,N); ...                                                  % Dynamics
+             +eye(n*N) -eye(n*N) -kron(eye(N),ones(n,1)) eye(n*N,n*N);          % Epigraph form
+             -eye(n*N) +eye(n*N) -kron(eye(N),ones(n,1)) eye(n*N,n*N);          % Epigraph form
              ]; 
 
+        qf = [qf; zeros(N+2*n*N,1)];                                            % Complete cost function
+        b = [b; zeros(2*n*N,1)];                                                % Complete cost function
+
         if (any(dVmax ~= Inf))
-            A = [A; [zeros(N, n * N) eye(N)] ];
+            A = [A zeros(size(A,1,N)); repmat([zeros(N,2*n*N) eye(N)],2,1)];    % Upper bound constraint
+            qf = [qf; zeros(N,1)];                                              % Complete cost function
         end
 
         if (any(dVmin > 0))
-            A = [A; [zeros(N, n * N) -eye(N)] ];
+            if (any(dVmax ~= Inf))
+                A = [A zeros(size(A,1,N)); zeros(N,2*n*N) eye(N) zeros(N,2*n*N+N) -eye(N)];    % Lower bound constraint
+            else
+                A = [A zeros(size(A,1,N)); repmat([zeros(N,2*n*N) eye(N)],2,1)];               % Lower bound constraint
+            end
+            
+            qf = [qf; zeros(N,1)];                                                             % Complete cost function
         end
     end
 
     % Equilibration
     if (equil_flag)
-        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-6, 'R');
-        D2 = diag(D2).';
-        D1 = diag(D1).';
+        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1E-10, 'L');
     else
         D2 = ones(1, n * N);
         D1 = ones(1, size(A,1));
     end
-    
-    % Initial setup
-    b = zeros(m,1);     % Independent term
 
     % Basis pursuit formulation
-    B = reshape(dV, 1, n * N) ./ D2(1,:);
+    B = reshape(dV, 1, n * N);
 
     V = zeros(2, size(B,1));
     V(1, B > 0) = + 2 * B(B > 0);
@@ -308,73 +314,46 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     V(2, B < 0) = - 2 * B(B < 0);
 
     V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Basis pursuit formulation
-    A = [A(1:m,1:n*N) -A(1:m,1:n*N)];                       % Basis pursuit formulation of the constraints
-    qf = [qf; qf];                                          % Linear cost function
-
     Vnorm = max(abs( reshape(B, n, N) ), [], 1);
 
     if (any(dVmax ~= Inf))
         
-        % Equilibration of the bounds
-        dVmax = dVmax .* D1(1, m+2*n*N+1:m+2*n*N+N);
-
         if (any(Vnorm > dVmax))
             error('Pruner cannot continue. Infeasible initial solution detected.')
         else
+            % Equilibration of the bounds
+            dVmax = dVmax .* D1(1, m+2*n*N+1:m+2*n*N+N);
 
+            % Equilibration of the initial solution
             V = [V; ...
                  +Vnorm; ...                        % Epigraph form
                  +Vnorm - dV; ...                   % Epigraph slacks
                  +Vnorm + dV; ...                   % Epigraph slacks
                  +dVmax - Vnorm];                   % Slack
             
-            % Assemble the constraint matrix
-            A = [A zeros(m, N+2*n*N+N); 
-                 +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
-                 -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
-                  zeros(N, 2 * n * N) eye(N) zeros(N, 2 * n * N) eye(N)];         
-
-            b = [b; zeros(2*n*N,1); dVmax.'];             % Complete independent term
-            qf = [qf; zeros(N+2*n*N+N,1)];                % Complete cost function
+            % Complete independent term
+            b = [b; dVmax.'];             
         end
     end
 
     if (any(dVmin > 0))
 
-        % Equilibration of the bounds
-        dVmin = dVmin .* D1(1, end-N+1:end);
-
         if (any(Vnorm < dVmin))
              error('Pruner cannot continue. Infeasible initial solution detected.')
         else
-            % Assemble the constraint matrix 
-            dim = size(V,1);
+
+            % Equilibration of the bounds
+            dVmin = dVmin .* D1(1, end-N+1:end);
         
-            % Complete matrix
-            if (dim > 2 * n)
-                A = [A zeros(size(A,1), N); 
-                     zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N + N) -eye(N)];
-                
-                V = [V; ...
-                    Vnorm - dVmin];    % Slack
-            else
-                A = [A zeros(m, N+2*n*N+N); 
-                     +eye(n*N) -eye(n*N) kron(-eye(N),ones(n,1)) +eye(n*N) zeros(n*N) kron(zeros(N),ones(n,1));
-                     -eye(n*N) +eye(n*N) kron(-eye(N),ones(n,1)) zeros(n*N) +eye(n*N) kron(zeros(N),ones(n,1));
-                      zeros(N, 2 * n * N) eye(N) zeros(N,2*n*N) -eye(N)];     
+            % Equilibration of the initial solution
+            V = [V; ...
+                 +Vnorm; ...                        % Epigraph form
+                 +Vnorm - dV; ...                   % Epigraph slacks
+                 +Vnorm + dV; ...                   % Epigraph slacks
+                 +Vnorm - dVmin];                   % Slack
 
-                V = [V; ...
-                     +Vnorm; ...                        % Epigraph form
-                     +Vnorm - dV; ...                   % Epigraph slacks
-                     +Vnorm + dV; ...                   % Epigraph slacks
-                     +Vnorm - dVmin];                   % Slack
-
-                b = [b; zeros(2 * n * N,1)];            % Augment the independent term in case it has not been done yet
-                qf = [qf; zeros(2*n*N+N,1)];            % Complete cost function
-            end
-
-            b = [b; dVmin.'];                           % Complete independent term
-            qf = [qf; zeros(N,1)];                      % Complete cost function
+            % Complete independent term
+            b = [b; dVmin.'];                           
         end
     end
 end

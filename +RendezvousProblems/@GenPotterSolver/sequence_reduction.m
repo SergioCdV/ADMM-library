@@ -68,22 +68,20 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
             Indx = X(1,:) ~= 0;
     
             % Saturated impulses
-            inf_idx = logical( sum( x(1:n,:) - x(n+1:2*n,:), 1) );
+            bnd_idx = logical( sum( x(1:n,:) - x(n+1:2*n,:), 1) );
     
             if (any(xmax ~= Inf))
-                inf_idx = inf_idx & x(2*n+1,:) < xmax;
-                inf_idx = inf_idx & x(4*n+2,:) > 0;
+                bnd_idx = bnd_idx & x(2*n+1,:) < xmax;
+                bnd_idx = bnd_idx & x(4*n+2,:) > 0;
                 con = con + 1;
             end
     
             if (any(xmin > 0))
-                inf_idx = inf_idx & x(2*n+1,:) > xmin;
-                inf_idx = inf_idx & x(end,:) > 0;
+                bnd_idx = bnd_idx & x(2*n+1,:) > xmin;
+                bnd_idx = bnd_idx & x(end,:) > 0;
                 con = con + 2;
             end
-    
-            null_flag = sum(inf_idx) > m;                % Flag to indicate if the sequence is reducible
-    
+        
             % Reduce the linear problem
             switch (con)
                 case 0
@@ -118,25 +116,29 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                 otherwise
                     % General selection of equations
                     num_imp = (size(lambda,1) - m) / (1 + 2 * n);
+                    len = size(X,2)/2;
     
                     % Pruning of constraints
-                    con_idx = logical( kron(inf_idx, ones(1,n)) );
+                    con_idx = logical( kron(bnd_idx, ones(1,n)) );
 
                     % Selection of variables
                     conv_idx = repmat(con_idx,1,2) & X(3,:) > 0;
-                    idx1 = logical( [Indx inf_idx conv_idx inf_idx] );
-                    V = [X(1,Indx) X(2,inf_idx) X(3,conv_idx) X(4,inf_idx)];
+                    Indx = Indx & repmat(conv_idx(1:len) & conv_idx(len+1:end), 1, 2);
+                    idx1 = logical( [Indx bnd_idx conv_idx bnd_idx] );
+                    V = [X(1,Indx) X(2,bnd_idx) X(3,conv_idx) X(4,bnd_idx)];
                        
                     % Selection of equations
                     idx2 = logical( [ones(m,1); ...
-                                     repmat([con_idx zeros(1,n*num_imp-size(X,2)/2)].', 2, 1); ...
-                                     [inf_idx.'; zeros(num_imp-length(inf_idx),1)] ...
+                                     [conv_idx(1:len) zeros(1,n*num_imp-len) conv_idx(len+1:end) zeros(1,n*num_imp-len)].'; ...
+                                     [bnd_idx.'; zeros(num_imp-length(bnd_idx),1)] ...
                                      ] );
 
                     U = u(idx2,idx1);                    % Considered subset of the sequence
                     qf = qf(idx1,1).';                   % Cost function
                     lambda = lambda(idx2,1);             % Independent term
             end
+
+            null_flag = sum(sum(reshape(Indx,n,[]),1) > 0) > m;                % Flag to indicate if the sequence is reducible
     end
 
     if (null_flag)
@@ -182,32 +184,35 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                     V = mu .* V;
                     
                     if (size(x,1) > 2 * n)
-                        dim = sum(inf_idx);
+                        dim = sum(bnd_idx);
                         X(1,Indx) = V(1,1:sum(Indx));
-                        X(2,inf_idx) = V(1,sum(Indx)+1:sum(Indx)+dim);
+                        X(2,bnd_idx) = V(1,sum(Indx)+1:sum(Indx)+dim);
                         X(3,conv_idx) = V(1,sum(Indx)+dim+1:sum(Indx)+dim+sum(conv_idx));
-                        X(4:end,inf_idx) = reshape(V(1,sum(Indx)+dim+sum(conv_idx)+1:end), [], dim);
+                        X(4:end,bnd_idx) = reshape(V(1,sum(Indx)+dim+sum(conv_idx)+1:end), [], dim);
 
                         len = size(X,2)/2;
-                        dim = length(inf_idx);
+                        dim = length(bnd_idx);
                         
                         x(1:n,:) = reshape(X(1,1:len), n, []);              % Positive side
                         x(n+1:2*n,:) = reshape(X(1,len+1:end), n, []);      % Negative side
 
                         % Re-compute slack variables
                         qnorm = repmat(X(2,1:dim), n, 1);
-                        dq = [reshape(qnorm - x(1:n,:) + x(n+1:2*n,:), 1, []) reshape(qnorm + x(1:n,:) - x(n+1:2*n,:), 1, [])];
-                        X(3,~conv_idx) = dq(1,~conv_idx);
+                        qnorm = [reshape(qnorm - x(1:n,:) + x(n+1:2*n,:), 1, []) reshape(qnorm + x(1:n,:) - x(n+1:2*n,:), 1, [])];
+                        X(3,~conv_idx) = qnorm(~conv_idx);          
 
-                        x(2*n+1,:) = X(2,1:dim);                            % Infinity norm
-                        x(2*n+2:3*n+1,:) = reshape(X(3,1:len), n, []);      % Positive side slacks
-                        x(3*n+2:4*n+1,:) = reshape(X(3,len+1:end), n, []);  % Negative side slacks
-                        x(4*n+2,:) = X(4:end,1:dim);                        % Infinity norm slacks
+                        x(2*n+2:3*n+1,:) = reshape(X(3,1:len), n, []);           % Positive side slacks
+                        x(3*n+2:4*n+1,:) = reshape(X(3,len+1:end), n, []);       % Negative side slacks
+
+                        x(2*n+1,:) = X(2,1:dim);                                 % Infinity norm
+                        x(4*n+2,:) = X(4:end,1:dim);                             % Infinity norm slacks
                     else
                         dim = size(X,2) / 2;
                         X(:,Indx) = reshape(V, size(X(:,Indx),2), size(X,1)).';
                         x = [reshape(X(:,1:dim), n, []); reshape(X(:,dim+1:end), n, [])];
                     end
+
+%                     sum(X([2 4],1:dim),1)
             end
         else
             warning('Infeasibility detected. Adding coasting will not improve the solution')
