@@ -32,7 +32,7 @@ n = 1;               % Characteristic frequency
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 50;
+N = 250;
 t = linspace(0, tf, N);
 nu = t;
 
@@ -66,9 +66,9 @@ myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 50;                                             % Maximum control authority
+dVmax = 10;                                             % Maximum control authority
 
-myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
+myThruster = thruster('L2', dVmin / Vc, dVmax / Vc);
 
 %% Optimization
 % Define the ADMM problem 
@@ -199,12 +199,19 @@ figure
 hold on
 if (dVmax ~= Inf)
     yline(dVmax, 'k--')
-
-    if (dVmax > 0)
+    if (dVmin > 0)
         yline(dVmin, 'k--')
         legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
     else
         legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
+
+   switch (myThruster.q)
+        case 'Linfty'
+            stem(t, max(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        case 'L1'
+            stem(t, sum(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        otherwise
     end
 end
 stem(t, dV_norm * Vc, 'filled');
@@ -218,8 +225,8 @@ xlim([0 t(end)])
 figure
 hold on
 if (dVmax ~= Inf)
-    yline(dVmax, 'k--')
-    if (dVmax > 0)
+    yline(dVmax, 'k--') 
+    if (dVmin > 0)
         yline(dVmin, 'k--')
         legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
     else
@@ -238,11 +245,20 @@ figure
 hold on
 if (dVmax ~= Inf)
     yline(dVmax, 'k--')
-    if (dVmax > 0)
+
+    if (dVmin > 0)
         yline(dVmin, 'k--')
         legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
     else
         legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
+
+    switch (myThruster.q)
+        case 'Linfty'
+            stem(t, max(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        case 'L1'
+            stem(t, sum(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        otherwise
     end
 end
 stem(t, dV3_norm * Vc, 'filled'); 

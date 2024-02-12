@@ -35,16 +35,16 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
         dVmax = Inf * ones(1,N);
     elseif (dVmax <= 0)
         error('Maximum control authority must be positive.')
-    elseif (size(dVmax) == [1 1])
-        dVmax = repmat(dVmax, 1,N);
+    elseif (size(dVmax,2) == 1)
+        dVmax = repmat(dVmax, 1, N);
     end
 
     if (~exist('dVmin', 'var'))
         dVmin = zeros(1,N);
     elseif (dVmax <= 0)
         error('Minimum control authority must be positive.')
-    elseif (size(dVmin) == [1 1])
-        dVmin = repmat(dVmin, 1,N);
+    elseif (size(dVmin,2) == 1)
+        dVmin = repmat(dVmin, 1, N);
     end
 
     if (dVmax < dVmin)
@@ -142,7 +142,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                 u = dV; 
                 Idx = sqrt(dot(dV,dV,1)) ~= 0;
                 u(:,Idx) = u(:,Idx) ./ sqrt(dot(dV(:,Idx), dV(:,Idx), 1));
-                dV = (V(1,:) .* D2) .* u; 
+                dV = ( V(1,:) .* D2(1:N) ) .* u; 
 
             case 'L1'
                 dV = V(1:n,:) - V(n+1:2*n,:);
@@ -161,12 +161,13 @@ end
 % Prepare the L2 problem 
 function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag)
     % Constants 
-    m = size(Phi,1);                              % Dimension of the state space
-    n = size(dV,1);                               % Dimension of the control space
-    N = size(dV,2);                               % Length of the sequence
+    m = size(Phi,1);                           % Dimension of the state space
+    n = size(dV,1);                            % Dimension of the control space
+    N = size(dV,2);                            % Length of the sequence
 
     % L2 norm
-    Vnorm = sqrt(dot(dV, dV, 1));             
+    Vnorm = sqrt(dot(dV, dV, 1)); 
+    V = Vnorm;
                 
     % Final dynamic matrix
     M = Phi(:,end-m+1:end);
@@ -183,73 +184,69 @@ function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     % Equlibration
     qf = ones(N,1);                           % Problem's cost function
     A = u;                                    % Constrains matrix
-    if (any(dVmax ~= Inf))                    % Maximum control authority constrain           
-        A = [A; eye(N)]; 
+    b = zeros(m,1);                           % Constraint vector
+
+    % Maximum control authority constrain
+    if (any(dVmax ~= Inf))                               
+        A = [A zeros(m,N); eye(N) eye(N)]; 
+        qf = [qf; zeros(N,1)];
     end
 
-    if (any(dVmin > 0))                       % Minimum control authority constrain                     
-        A = [A; -eye(N)];
+    % Minimum control authority constrain
+    if (any(dVmin > 0))    
+        % Additional constraining
+        if (size(qf,1) == 2 * N)
+            A = [A zeros(size(A,1), N); eye(N) zeros(N) -eye(N)];
+        else
+            A = [A zeros(m, N); eye(N) -eye(N)];
+        end
+        qf = [qf; zeros(N,1)];
     end
     
     % Equilibration
     if (equil_flag)
         % Ruiz equillibration
-        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1e-4, false);
-        D2 = diag(D2).';
-        D1 = diag(D1).';
+        [qf, A, ~, D1, D2] = Solvers.Ruiz_equil(qf, A, 1E-10, 'L');
     else
         % No equilibration
-        D2 = ones(1,N);
+        D2 = ones(1,size(A,2));
         D1 = ones(1,size(A,1));
     end
 
     % Initial setup
-    A = A(1:m,:);
-    b = zeros(m,1);            % Constraint vector
-    Vnorm = Vnorm ./ D2;       % Equilibration of the initial sequence
-    V = Vnorm;
-
     if (any(dVmax ~= Inf))
         
-        % Equilibration of the bounds
-        dVmax = dVmax .* D1(1, m+1:m+N);
-
         if (any(Vnorm > dVmax))
             error('Pruner cannot continue. Infeasible initial solution detected.')
         else
+            % Equilibration of the initial sequence
+            V = Vnorm ./ D2(1:N);    
+
+            % Equilibration of the bounds
+            dVmax = dVmax .* D1(1,m+1:m+N);
             
             % Augmented decision vector: states + slacks
             V = [V(1,:); ...
-                 dVmax - Vnorm];
+                 (dVmax - V(1,:) *  A(m+1:m+N,1:N).') / A(m+1:m+N,N+1:2*N).'];
             
             % Additional constraining
-            A = [A zeros(m, N); eye(N) eye(N)];     % Complete matrix
-            b = [b; dVmax.'];                       % Complete independent term
-            qf = [qf; zeros(N,1)];                  % Complete cost function
+            b = [b; dVmax.'];          % Complete independent term
         end
     end
     
     if (any(dVmin > 0))
 
         % Equilibration of the bounds
-        dVmin = dVmin .* D1(1, end-N+1:end);
+        dVmin = dVmin .* D1(1,end-N+1:end);
 
         % Augmented decision vector: states + slacks
         if (any(Vnorm < dVmin))
              error('Pruner cannot continue. Infeasible initial solution detected.')
         else
             V = [V; ...
-                 Vnorm - dVmin];
+                 -(V(1,:) *  A(end-N+1:end,1:N).' - dVmin) / A(end-N+1:end,end-N+1:end).'];
 
-            % Additional constraining
-            if (size(V,1) == 3)
-                A = [A zeros(size(A,1), N); eye(N) zeros(N) -eye(N)];
-            else
-                A = [A zeros(m, N); eye(N) -eye(N)];
-            end
-
-            b = [b; dVmin.'];                       % Complete independent term
-            qf = [qf; zeros(N,1)];                  % Complete cost function
+            b = [b; dVmin.'];          % Complete independent term
         end
     end
 end
@@ -305,8 +302,10 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     B = reshape(dV, 1, n * N) ./ D2(1,:);
 
     V = zeros(2, size(B,1));
-    V(1, B > 0) = +B(B > 0);
-    V(2, B < 0) = -B(B < 0);
+    V(1, B > 0) = + 2 * B(B > 0);
+    V(2, B > 0) = + 1 * B(B > 0);
+    V(1, B < 0) = - 1 * B(B < 0);
+    V(2, B < 0) = - 2 * B(B < 0);
 
     V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Basis pursuit formulation
     A = [A(1:m,1:n*N) -A(1:m,1:n*N)];                       % Basis pursuit formulation of the constraints
