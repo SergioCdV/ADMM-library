@@ -285,9 +285,7 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
 
     if (any(dVmin > 0))
         if (any(dVmax ~= Inf))
-            A = [A zeros(size(A,1),2*n*N); ...
-                zeros(n*N,4*n*N) eye(n*N) zeros(n*N); ...
-                zeros(n*N,4*n*N) zeros(n*N) eyen(n*N)];                    % Lower bound constraint
+            A = [A zeros(size(A,1),2*n*N); zeros(N,4*n*N) eye(N) zeros(N,2*n*N+N)];    % Lower bound constraint
         else
             A = [A zeros(size(A,1),2*n*N); ...                             % Dynamics
                  +eye(n*N) -eye(n*N) eye(n*N,n*N) zeros(n*N,n*N);          % Epigraph form
@@ -340,12 +338,14 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
         else
 
             % Equilibration of the bounds
-            dVmin = repmat(dVmin,1,2*n) .* D1(1, end-2*n*N+1:end);
+            dVmin = dVmin .* D1(1, end-2*n*N+1:end);
         
             % Equilibration of the initial solution
             V = [V; ...
-                 reshape(-dVmin(1:n*N), n, []) + dV; ...       % Epigraph slacks
-                 reshape(-dVmin(n*N+1:end), n, []) - dV];      % Epigraph slacks
+                 +Vnorm; ...                        % Epigraph form
+                 +Vnorm - dV; ...                   % Epigraph slacks
+                 +Vnorm + dV; ...                   % Epigraph slacks
+                 +Vnorm - dVmin];                   % Slack
 
             % Complete independent term
             b = [b; dVmin.'];                           

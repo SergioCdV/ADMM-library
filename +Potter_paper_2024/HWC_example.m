@@ -65,8 +65,8 @@ K = Inf;                                                % Maximum number of impu
 myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
-dVmin = 0;                                              % Minimum control authority
-dVmax = 10;                                             % Maximum control authority
+dVmin = 0.01;                                              % Minimum control authority
+dVmax = Inf;                                             % Maximum control authority
 
 myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
 
