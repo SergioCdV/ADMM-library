@@ -85,7 +85,7 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
         switch (q)
             case 'Linfty'
                 % L1 problem
-                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, 0);
+                [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag);
     
             case 'L2'
                 % L2 problem
@@ -108,11 +108,9 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                     end
 
                     if     (size(V,1) == 6*n)
-%                         idx = [idx, idx + n * N, index + 2 * n * N, idx + 2 * n * N + N, idx + 3 * n * N + N, index + 4 * n * N + N, index + 4 * n * N + 2 * N];
                         idx = [idx, idx + n * N, idx + 2 * n * N, idx + 3 * n * N, idx + 4 * n * N, idx + 5 * n * N];
 
                     elseif (size(V,1) == 4*n)
-%                         idx = [idx, idx + n * N, index + 2 * n * N, idx + 2 * n * N + N, idx + 3 * n * N + N, index + 4 * n * N + N];
                         idx = [idx, idx + n * N, idx + 2 * n * N, idx + 3 * n * N];
 
                     else
@@ -313,7 +311,12 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     V(1, B > 0) = + 1 * B(B > 0);
     V(2, B < 0) = - 1 * B(B < 0);
 
+    V(1,:) = V(1,:) .* D2(1,1:N*n);
+    V(2,:) = V(2,:) .* D2(1,N*n+1:2*N*n);
+    
+    v = [V(1,:) V(2,:)];
     V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Basis pursuit formulation
+
     Vnorm = max(abs( reshape(B, n, N) ), [], 1);
 
     if (any(dVmax ~= Inf))
@@ -324,9 +327,13 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
             % Equilibration of the bounds
             dVmax = repmat(dVmax,1,2*n) .* D1(1, m+1:m+2*n*N);
 
+            Vplus = ( dVmax(1:n*N) - v * A(m+1:m+n*N,1:2*n*N).') / A(m+1:m+n*N,2*n*N+1:3*n*N).';
+            Vminus = ( dVmax(1:n*N) - v * A(m+n*N+1:m+2*n*N,1:2*n*N).') / A(m+n*N+1:m+2*n*N,3*n*N+1:4*n*N).';
+
             V = [V; ...
-                 reshape(dVmax(1:n*N), n, []) - dV; ...       % Epigraph slacks
-                 reshape(dVmax(n*N+1:end), n, []) + dV];      % Epigraph slacks
+                 reshape(Vplus, n, []); ...              % Epigraph slacks
+                 reshape(Vminus, n, []); ...             % Epigraph slacks
+                 ];      
 
             % Complete independent term
             b = [b; dVmax.'];             
@@ -334,7 +341,8 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     end
 
     if (any(dVmin > 0))
-
+        error('Pruner cannot continue. The problem is non-convex.');
+        
         if (any(Vnorm < dVmin))
              error('Pruner cannot continue. Infeasible initial solution detected.')
         else

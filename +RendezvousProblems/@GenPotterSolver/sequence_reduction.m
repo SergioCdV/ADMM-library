@@ -138,8 +138,6 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
                     U = u(idx2,idx1);                    % Considered subset of the sequence
                     qf = qf(idx1,1).';                   % Cost function
                     lambda = lambda(idx2,1);             % Independent term
-
-                    cond_idx = Indx(1:len);
             end
 
             % Flag to indicate if the sequence is reducible
