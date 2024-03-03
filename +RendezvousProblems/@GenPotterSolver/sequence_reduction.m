@@ -147,7 +147,7 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
     if (null_flag)
         % Update of the LU
-        [~, Uf, ~] = lu(U);
+        [Lf, Uf, ~] = lu(U);
 
         % Compute the coordinate vector associated to a null impulse
         M = size(Uf,1);
@@ -169,6 +169,8 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
             if (Alpha < 0)
                 alpha = -alpha;                 % Ensure feasibility of the solution in the unconstrained case
             end
+        else
+            alpha = alpha;% + ( lambda.' / U.' );
         end
     
         % Update the impulse sequence 

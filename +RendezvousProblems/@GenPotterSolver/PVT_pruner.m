@@ -104,10 +104,10 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
                 case 'L1'        
                     idx = zeros(1,length(index) * n);
                     for j = 1:length(index)
-                        idx(1 + n*(j-1):n*j) = n * [index(j) index(j) index(j)] - (n-1:-1:0);
+                        idx(1 + n*(j-1):n*j) = n * repmat(index(j), 1, n) - (n-1:-1:0);
                     end
 
-                    if     (size(V,1) == 6*n)
+                    if (size(V,1) == 6*n)
                         idx = [idx, idx + n * N, idx + 2 * n * N, idx + 3 * n * N, idx + 4 * n * N, idx + 5 * n * N];
 
                     elseif (size(V,1) == 4*n)
@@ -285,7 +285,7 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
         if (any(dVmax ~= Inf))
             A = [A zeros(size(A,1),2*n*N); ...
                 zeros(n*N,4*n*N) eye(n*N) zeros(n*N); ...
-                zeros(n*N,4*n*N) zeros(n*N) eyen(n*N)];                    % Lower bound constraint
+                zeros(n*N,4*n*N) zeros(n*N) eye(n*N)];                     % Lower bound constraint
         else
             A = [A zeros(size(A,1),2*n*N); ...                             % Dynamics
                  +eye(n*N) -eye(n*N) eye(n*N,n*N) zeros(n*N,n*N);          % Epigraph form
