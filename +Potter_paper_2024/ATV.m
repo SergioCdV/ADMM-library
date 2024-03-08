@@ -234,21 +234,31 @@ function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
     % Initial mean anomaly 
     M = M0 + n * dt;
 
-    % Newton-method 
-    iter = 1; 
-    maxIter = 100; 
-    GoOn = true; 
-    tol = 1e-15;
-    E = M;
+    % Laguerre-Conway's method
+    maxIter = 10;       % Maximum number of iterations
+    iter = 1;           % Initial iteration
+    GoOn = true;        % Convergene boolean flag
+    k = 5;              % Laguerre constant
+    tol = 1E-15;        % Convergence tolerance
 
-    while (GoOn && iter < maxIter)
-        f = E - e * sin(E) - M; 
-        df = 1 - e * cos(E);
+    % Warm start
+    u = M + e;
+    E = M .* (1-sin(u)) + u .* sin(M) ./ (1+sin(M)-sin(u));
 
-        ds = -f/df;
-        E = E + ds; 
+    while (iter < maxIter && GoOn)
+        fn = E - e .* sin(E) - M;
+        dfn = 1 - e .* cos(E);
+        ddfn = e .* sin(E);
 
-        if (abs(ds) < tol)
+        dg(1) = k / (dfn+sqrt( abs((k-1)^2*dfn^2-k*(k-1)*dfn*ddfn)) );
+        dg(2) = k / (dfn-sqrt( abs((k-1)^2*dfn^2-k*(k-1)*dfn*ddfn)) );
+
+        dg = dg( abs(dg) == max( abs(dg) ) );
+
+        dn = - fn / dg;
+        E = E + dn;
+
+        if all(abs(dn) < tol)
             GoOn = false;
         else
             iter = iter+1;
