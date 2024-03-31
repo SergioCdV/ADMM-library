@@ -1,4 +1,4 @@
-%% Optimal Linear Rendezvous via ADMM %% 
+%% Optimal Linear Rendezvous via simplex %% 
 % Sergio Cuevas del Valle
 % Date: 03/03/24
 % File: PRISMA.m 
@@ -12,7 +12,7 @@ close;
 clear; 
 clc
 
-set_graphics();
+utils.set_graphics();
 
 %% Define the target orbit and mission parameters
 % Parameters

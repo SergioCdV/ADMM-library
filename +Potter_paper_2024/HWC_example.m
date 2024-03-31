@@ -1,4 +1,4 @@
-%% ADMM Library %% 
+%% Optimal Linear Rendezvous via simplex %% 
 % Sergio Cuevas del Valle
 % Date: 22/01/24
 % File: HCW_example.m 
@@ -9,10 +9,10 @@
 % Solve for the time-fixed CW optimal Lp problem using ADMM and PVT
 
 close; 
-clear all; 
+clear; 
 clc
 
-set_graphics();
+utils.set_graphics();
 
 %% Define the target orbit
 % Parameters

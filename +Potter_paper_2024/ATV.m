@@ -13,7 +13,7 @@ close;
 clear; 
 clc
 
-set_graphics();
+utils.set_graphics();
 
 %% Define the target orbit and mission parameters
 % Parameters
