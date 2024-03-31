@@ -6,6 +6,7 @@
 % Validated: 
 
 %% SIMBOL X rendezvous %% 
+% Solve for the time-fixed YA optimal using incomplete simplex method %
 
 close; 
 clear; 

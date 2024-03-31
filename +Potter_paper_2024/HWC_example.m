@@ -3,10 +3,9 @@
 % Date: 22/01/24
 % File: HCW_example.m 
 % Issue: 0 
-% Validated: 
 
 %% Clohessy-Wiltshire rendezvous %% 
-% Solve for the time-fixed CW optimal Lp problem using ADMM and PVT
+% Solve for the time-fixed CW optimal Lp problem using incomplete simplex method %
 
 close; 
 clear; 

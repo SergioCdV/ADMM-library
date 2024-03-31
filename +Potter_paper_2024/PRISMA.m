@@ -6,7 +6,7 @@
 % Validated: 
 
 %% Yamanaka-Andersen rendezvous, PRSIMA mission %% 
-% Solve for the time-fixed YA optimal using simplex
+% Solve for the time-fixed YA optimal using incomplete simplex method %
 
 close; 
 clear; 

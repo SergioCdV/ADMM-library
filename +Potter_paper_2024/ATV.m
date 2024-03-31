@@ -2,12 +2,10 @@
 % Sergio Cuevas del Valle
 % Date: 03/03/24
 % File: ATV.m 
-% Issue: 0 
-% Validated: 
+% Issue: 0  
 
 %% Yamanaka-Andersen rendezvous, Arzelier 2016 %% 
-% Solve for the time-fixed YA optimal L2/L1 problem using incomplete
-% simplex method
+% Solve for the time-fixed YA optimal L2/L1 problem using incomplete simplex method %
 
 close; 
 clear; 

@@ -2,9 +2,10 @@
 % Sergio Cuevas del Valle
 % Date: 28/08/23
 % File: set_graphics.m
-% Validated: 
 
-% Set graphics
+%% Set graphics %% 
+% This functions sets the graphical environment of the library %
+
 function set_graphics()
     %Set graphical properties
    set(groot, 'defaultAxesTickLabelInterpreter', 'latex'); 
