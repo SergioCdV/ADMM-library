@@ -3,11 +3,10 @@
 % Date: 27/01/24
 % File: GenPotterSlver.m 
 % Issue: 0 
-% Validated: 
 
 %% Generalized Potter Rendezvous Solver %% 
 % Implementation of a object-oriented solver for primal linear rendezvous problems
-% via ADMM
+% via Potter-Stern solver
 
 classdef GenPotterSolver < RendezvousProblems.SolverRendezvous
     % Basic properties

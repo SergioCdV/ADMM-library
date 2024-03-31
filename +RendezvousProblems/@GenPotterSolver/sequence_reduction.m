@@ -1,3 +1,32 @@
+%% Optimal rendezvous by ADMM %% 
+% Sergio Cuevas del Valle
+% Date: 27/01/24
+% File: sequence_reduction.m 
+% Issue: 0 
+% Validated: 
+
+%% Sequence reduction %% 
+% Implementation of the main Generalized Potter routine to concentrate
+% candidate impulsive control plans 
+
+% Inputs:  - m, scalar, the state space dimension 
+%          - n, scalar, the control space dimension
+%          - p, scalar, the p-norm of the control vector to be used in the
+%            cost function (1, 2, infty)
+%          - q, scalar, the q-norm of the control vector to be used in the
+%            constraints (1, 2, infty)
+%          - u, array, the problem's linear matrix to be used to solve the
+%            problem
+%          - qf, array/vector, the linear cost function of the problem
+%          - x, vector, the linear solution to be concentrated
+%          - xmax, the upper bounds for x 
+%          - xmin, the lower bounds for x
+
+% Outputs: - x, the concentrated linear solution 
+%          - cost, the lq norm of the concentrated solution 
+%          - null_flag, a boolean variable to acknowledge if the solutions
+%            can be further concentrated
+
 function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda, xmax, xmin)
     % Final indices
     switch (q)
@@ -147,7 +176,7 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
 
     if (null_flag)
         % Update of the LU
-        [Lf, Uf, ~] = lu(U);
+        [~, Uf, ~] = lu(U);
 
         % Compute the coordinate vector associated to a null impulse
         M = size(Uf,1);
@@ -169,8 +198,6 @@ function [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda,
             if (Alpha < 0)
                 alpha = -alpha;                 % Ensure feasibility of the solution in the unconstrained case
             end
-        else
-            alpha = alpha;% + ( lambda.' / U.' );
         end
     
         % Update the impulse sequence 

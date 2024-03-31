@@ -5,7 +5,7 @@
 % Validated: 25/01/23
 
 %% Primer Vector Theory Pruner %%
-% This script contains the function to reduce an impulsive control law by means of Potter's generalized pruner.
+% This script contains the function to reduce an impulsive control law by means of Potter's generalized pruner
 
 % Inputs: - matrix Phi, the STM matrix of the system in time
 %         - matrix B, the control matrix of the system (possibly in time)

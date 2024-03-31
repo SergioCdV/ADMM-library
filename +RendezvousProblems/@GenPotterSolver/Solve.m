@@ -9,7 +9,7 @@
 % Implementation of a object-oriented solver for primal linear rendezvous problems
 % via ADMM
 
-% Inputs:  - object obj, the Linear Rendezvous Problem object
+% Inputs:  - object obj, the Linear Rendezvous Problem object to be solved
 
 % Outputs: - vector t, of dimensions 1 x N, at which the control is to be applied (maneuver execution times)
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
