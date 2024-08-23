@@ -42,8 +42,8 @@ M0 = E - Orbit_t(2)*sin(E);
 nu_f = 2*pi*K + InverseKeplerEquation(n, Orbit_t(2), M0, dt);       % Final true anomaly 
 
 % Initial relative conditions 
-x0 = [18309.5 -23764.7 -0.0542 -0.0418];              % In-plane rendezvous
-xf = [335.12 -371.1 0.00155 0.0014];                  % Final conditionsxl
+x0 = [+18309.5 -23764.7 -0.0542 -0.0418];              % In-plane rendezvous
+xf = [+335.12 -371.1 +0.00155 +0.0014];                  % Final conditionsxl
    
 % Dimensionalization (canonical units)
 Lc = Orbit_t(1);        % Characteristic length
@@ -65,7 +65,7 @@ Orbit_t(1) = Orbit_t(1) / Lc;
 h = sqrt(mu * Orbit_t(1) * (1-Orbit_t(2)^2));
 
 % Number of possible impulses 
-N = 50;
+N = 1000;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -127,15 +127,15 @@ K = Inf;                                                % Maximum number of impu
 myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
-dVmin = 0.001 / Vc;                                              % Minimum control authority
-dVmax = 0.3 / Vc;                                            % Maximum control authority
+dVmin = 0;%0.001 / Vc;                                              % Minimum control authority
+dVmax = Inf;%0.3 / Vc;                                            % Maximum control authority
 myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.GenPotterSolver(myMission, myThruster);
  
-iter = 25; 
+iter = 1; 
 time = zeros(1,iter);
 
 for i = 1:iter
@@ -182,8 +182,21 @@ for i = 1:length(nu)
     s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
+% Reference solution 
+[nuref, sref, dV_ref] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0);
+
+switch (myThruster.p)
+    case 'L1'
+        dV_norm_ref = sum(abs(dV_ref),1);
+    case 'L2'
+        dV_norm_ref = sqrt(dot(dV_ref,dV_ref,1));
+    case 'Linfty'
+        dV_norm_ref = max(abs(dV_ref));
+end
+
 % Dimensionalization 
-s = s .* repmat([Lc/1e3 Lc/1e3 Vc Vc], N, 1);
+s =    s    .* repmat([Lc Lc Vc Vc], size(s,1), 1);
+sref = sref .* repmat([Lc Lc Vc Vc], size(sref,1), 1);
 
 %% Results 
 figure
@@ -203,15 +216,18 @@ if (dVmax ~= Inf)
         case 'L1'
             stem(t, sum(abs(dV), [], 1) * Vc, 'filled', 'k');
         otherwise
-    end
+   end
+else
+   stem(nuref, dV_norm_ref * Vc * 100, 'filled', 'c'); 
 end
-stem(nu, dV_norm * Vc * 100, 'filled'); 
+stem(nu, dV_norm * Vc * 100, 'filled', Color=[0 0.4470 0.7410]); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_2$ [cm/s]')
 xlabel('$\theta$')
+legend('Arzelier et al.', 'PS')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-xlim([nu(1) nu(end)])
+xlim([min(nu(1), nuref(1)) max(nu(end), nuref(end))])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
@@ -220,8 +236,9 @@ hold on
 scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
 scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
 scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
-plot(s(:,1), s(:,2), 'b'); 
+plot(sref(:,1), sref(:,2), 'c', 'LineWidth', 0.2); 
+plot(s(:,1), s(:,2), 'b', 'LineWidth', 1); 
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', '$\mathbf{s}_{ref}$', '$\mathbf{s}_{PS}$', 'AutoUpdate', 'off');
 hold off
 xlabel('$x$ [km]')
 ylabel('$z$ [km]')
@@ -296,4 +313,90 @@ function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
     cos_nu = (-e + cos(E)) / (1 - e * cos(E));
     nu_f = atan2(sin_nu, cos_nu);
     nu_f = mod(nu_f,2*pi);
+end
+
+function [nu, sref, dV] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0) 
+    % Reference solution Arzelier et al., 2011 and Benedikter, 2019 for L2
+    nu_ref = [2.3562 2.7859];                                                    % Impulsive locations
+    dV_ref(:,1:2) = [-0.6193 +0.1748; +0.5061 -0.4912] / Vc;              % Non-dimensional impulse sequence
+
+    % Complete the domain
+    nu = [];
+    dV = [];
+    for i = 1:size(nu_ref,2)-1
+        aux = linspace(nu_ref(i), nu_ref(i+1), 1000);
+        nu = [nu aux];
+        dV = [dV dV_ref(:,i) zeros(size(dV_ref,1), size(aux,2)-1)];
+        nu = nu(1:end-1);
+        dV = dV(:,1:end-1);
+    end
+
+    nu = [nu nu_ref(end)];
+    dV = [dV dV_ref(:,end)];
+    
+    % Pre-allocation
+    sref = zeros(length(nu),4);
+    sref(1,:) = x0.';
+    
+    t = nu;
+    N = length(nu);
+    
+    K = 0;
+    for i = 1:length(nu)
+        dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+        if (i > 2)
+            if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+                K = K+1;
+            end
+        end
+        t(i) = 2*K*pi + dt;
+    end
+    
+    % YA Phi
+    L = zeros(4, 4 * N);
+    Phi = zeros(4, 4 * N);
+    K = 0;
+    
+    for i = 1:length(nu)
+        % Constants of motion 
+        omega = mu^2 / h^3;                 % True anomaly angular velocity
+        k = 1 + Orbit_t(2) * cos(nu(i));    % Transformation
+        kp =  - Orbit_t(2) * sin(nu(i));    % Derivative of the transformation
+    
+        % Solve Kepler's equation
+        dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+        
+        % Consider multiple revolutions
+        if (i > 2)
+            if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+                K = K+1;
+            end
+        else
+           Phi0 = YA_Phi(mu, h, Orbit_t(2), 0, nu(1)); 
+           invPhi0 = Phi0([1 3 4 6], [1 3 4 6])^(-1);
+           L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
+        end
+    
+        DT = 2*K*pi + dt;
+        phi = YA_Phi(mu, h, Orbit_t(2), DT, nu(i));
+    
+        stm = phi([1 3 4 6], [1 3 4 6]) * invPhi0;
+        
+        L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
+        Phi(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * phi([1 3 4 6], [1 3 4 6]);
+        STM(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * stm * L(:,1:4);
+    end
+
+    % Computation
+    for i = 1:length(nu)
+        % Propagate 
+        if (i > 1)
+            Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
+            Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
+            sref(i,:) = sref(i-1,:) * (Phi2 * Phi1^(-1)).';
+        end
+    
+        % Add maneuver
+        sref(i,3:4) = sref(i,3:4) + dV(:,i).';
+    end
 end

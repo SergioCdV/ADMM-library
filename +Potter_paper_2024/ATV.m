@@ -119,13 +119,13 @@ myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.GenPotterSolver(myMission, myThruster);
 
-iter = 25; 
+iter = 1; 
 time = zeros(1,iter);
 
 for i = 1:iter
@@ -171,19 +171,37 @@ for i = 1:length(nu)
     s(i,3:4) = s(i,3:4) + dV(:,i).';
 end
 
+% Reference solution 
+[nuref, sref, dV_ref] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf);
+
+switch (myThruster.p)
+    case 'L1'
+        dV_norm_ref = sum(abs(dV_ref),1);
+    case 'L2'
+        dV_norm_ref = sqrt(dot(dV_ref,dV_ref,1));
+    case 'Linfty'
+        dV_norm_ref = max(abs(dV_ref));
+end
+
 % Dimensionalization 
-s = s .* repmat([Lc/1e3 Lc/1e3 Vc Vc], N, 1);
+s =    s    .* repmat([Lc Lc Vc Vc], size(s,1), 1);
+sref = sref .* repmat([Lc Lc Vc Vc], size(sref,1), 1);
+
+s = s / 1e3;
+sref = sref / 1e3;
 
 %% Results 
 figure
 hold on
-stem(nu, dV_norm * Vc, 'filled'); 
+stem(nuref, dV_norm_ref * Vc, 'filled', 'c');
+stem(nu, dV_norm * Vc, 'filled', Color=[0 0.4470 0.7410]); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_1$ [m/s]')
 xlabel('$\theta$')
+legend('Arzelier et al.', 'PS')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-xlim([0 nu(end)])
+xlim([min(nu(1), nuref(1)) max(nu(end), nuref(end))])
 
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
@@ -192,8 +210,9 @@ hold on
 scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
 scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
 scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
-plot(s(:,1), s(:,2), 'b'); 
+plot(sref(:,1), sref(:,2), 'c', 'LineWidth', 0.2); 
+plot(s(:,1), s(:,2), 'b', 'LineWidth', 1); 
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', '$\mathbf{s}_{ref}$', '$\mathbf{s}_{PS}$', 'AutoUpdate', 'off');
 hold off
 xlabel('$x$ [km]')
 ylabel('$z$ [km]')
@@ -268,4 +287,116 @@ function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
     cos_nu = (-e + cos(E)) / (1 - e * cos(E));
     nu_f = atan2(sin_nu, cos_nu);
     nu_f = mod(nu_f,2*pi);
+end
+
+function [nu, sref, dV] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf) 
+    % Reference solution Arzelier et al., 2016
+    if (1)
+        % L2 problem
+        nu_ref = [0 1.3872 6.6639 8.1832];                                % Impulsive locations
+    else
+        % L1 problem
+        nu_ref = [0 1.3352 6.7087 8.1832];                                % Impulsive locations
+    end
+
+    % Complete the domain
+    nu = [];
+    for i = 1:size(nu_ref,2)-1
+        aux = linspace(nu_ref(i), nu_ref(i+1), 1000);
+        nu = [nu aux];
+        nu = nu(1:end-1);
+    end
+
+    nu = [nu nu_ref(end)];
+    ti = 1:999:size(nu,2);
+    aux = zeros(1, size(nu,2)); 
+    aux(ti) = ones(1,size(ti,2)); 
+    ti = aux;
+    
+    % Pre-allocation
+    sref = zeros(length(nu),4);
+    sref(1,:) = x0.';
+    
+    t = nu;
+    N = length(nu);
+
+    % Control input matrix 
+    B = repmat([zeros(2); eye(2)], 1, length(nu));
+    
+    K = 0;
+    for i = 1:length(nu)
+        dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+        if (i > 2)
+            if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+                K = K+1;
+            end
+        end
+        t(i) = 2*K*pi + dt;
+    end
+    
+    % YA Phi
+    L = zeros(4, 4 * N);
+    Phi = zeros(4, 4 * N);
+    K = 0;
+    
+    for i = 1:length(nu)
+        % Constants of motion 
+        omega = mu^2 / h^3;                 % True anomaly angular velocity
+        k = 1 + Orbit_t(2) * cos(nu(i));    % Transformation
+        kp =  - Orbit_t(2) * sin(nu(i));    % Derivative of the transformation
+    
+        % Solve Kepler's equation
+        dt = KeplerEquation(n, Orbit_t(2), nu(1), nu(i));
+        
+        % Consider multiple revolutions
+        if (i > 2)
+            if (mod(nu(i),2*pi) < mod(nu(i-1),2*pi))
+                K = K+1;
+            end
+        else
+           Phi0 = YA_Phi(mu, h, Orbit_t(2), 0, nu(1)); 
+           invPhi0 = Phi0([1 3 4 6], [1 3 4 6])^(-1);
+           L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
+        end
+    
+        DT = 2*K*pi + dt;
+        phi = YA_Phi(mu, h, Orbit_t(2), DT, nu(i));
+    
+        stm = phi([1 3 4 6], [1 3 4 6]) * invPhi0;
+        
+        L(:,1+4*(i-1):4*i) = [k * eye(2) zeros(2); kp * eye(2) eye(2)/(k * omega)];
+        Phi(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * phi([1 3 4 6], [1 3 4 6]);
+        STM(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * stm * L(:,1:4);
+    end
+
+    % Define the optimal impulsive sequence 
+    m = size(STM,1);
+    n = 2;
+    Phi = zeros(size(B,2), size(STM,1));
+    Phi0 = STM(:,1:m);
+    M = STM(:,1+m*(N-1):m*N);
+
+    for i = 1:length(t)
+        Phi(1+n*(i-1):n*i,:) = (STM(:,1+m*(i-1):m*i)\B(:,1+n*(i-1):n*i)).';
+    end
+
+    % Compute the initial missvector
+    dV = zeros(n, size(nu,2));
+    b = ( M \ xf ) - ( Phi0 \ x0 ) ;
+    A = Phi(logical(kron(ti,ones(1,n))),:).';
+    x = A \ b;
+    dV(:,logical(ti)) = reshape(x, n, []);  % Control sequence
+
+    % Computation
+    for i = 1:length(nu)
+        % Propagate 
+        if (i > 1)
+            Phi1 = reshape(STM(:,1+4*(i-2):4*(i-1)), [4 4]);
+            Phi2 = reshape(STM(:,1+4*(i-1):4*i), [4 4]);
+            sref(i,:) = sref(i-1,:) * (Phi2 * Phi1^(-1)).';
+        end
+    
+        % Add maneuver
+        sref(i,3:4) = sref(i,3:4) + dV(:,i).';
+    end
 end
