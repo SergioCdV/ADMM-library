@@ -27,11 +27,14 @@ Tc = 1/n;            % Characteristic time
 Vc = Lc/Tc;          % Characteristic velocity
 n = 1;               % Characteristic frequency
 
+iter = 1;
+time = zeros(1,iter);
+
 %% Define the rendezvous problem and the STM 
 tf = 2*pi;                      % Time of flight
     
 % Time span
-N = 50;
+N = 250;
 t = linspace(0, tf, N);
 nu = t;
 
@@ -64,17 +67,15 @@ K = Inf;                                                % Maximum number of impu
 myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
-dVmin = 1;                                              % Minimum control authority
-dVmax = 10;                                             % Maximum control authority
+dVmin = 0;                                              % Minimum control authority
+dVmax = Inf;                                            % Maximum control authority
 
-myThruster = thruster('L1', dVmin / Vc, dVmax / Vc);
+myThruster = thruster('L2', dVmin / Vc, dVmax / Vc);
 
 %% Optimization
 % Define the ADMM problem 
 myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
-iter = 1;
-time = zeros(1,iter);
 rho = 1 / N^2;                                          % AL parameter 
 eps = [1e-4; 1e-5];                                     % Numerical tolerance
 
@@ -88,7 +89,19 @@ lambda = reshape(sol(1:6), 6, []);
 p = reshape(sol(7:end), 3, []);
 dV = myProblem.u;
 
-% Moore-Penrose solution
+Output = myProblem.Report;
+error = sqrt( dot(myProblem.e, myProblem.e, 1) );
+
+switch (myThruster.q)
+    case 'L1'
+        p_norm = sum(abs(p),1);
+    case 'L2'
+        p_norm = sqrt(dot(p,p,1));
+    case 'Linfty'
+        p_norm = max(abs(p));
+end
+
+%% Moore-Penrose solution
 for i = 1:iter
     tic
     STM = myMission.Phi;                  % STM of the system
@@ -110,61 +123,64 @@ for i = 1:iter
     dV2 = reshape(dV2, n, []);
     time(2,i) = toc;
 end
-%%
-myPotterProblem = RendezvousProblems.GenPotterSolver(myMission, myThruster);
+
+%% Potter-Stern solution
+myPotterProblem = RendezvousProblems.PotterSolver(myMission, myThruster);
+
 % Pruning solution
 for i = 1:iter
     tic
-    
     [~, dV3, ~, myPotterProblem2] = myPotterProblem.Solve();
     time(3,i) = toc;
+end
+
+%% Simplex method 
+myPotterProblem = RendezvousProblems.SimplexMethod(myMission, myThruster);
+
+for i = 1:iter
+    tic
+    [~, dV4, ~, myPotterProblem2] = myPotterProblem.Solve();
+    time(4,i) = toc;
 end
 
 %% Outcome 
 switch (myThruster.p)
     case 'L1'
-        dV_norm = sum(abs(dV),1);
+        dV_norm =  sum(abs(dV),1);
         dV2_norm = sum(abs(dV2),1);
         dV3_norm = sum(abs(dV3),1);
+        dV4_norm = sum(abs(dV4),1);
+
     case 'L2'
-        dV_norm = sqrt(dot(dV,dV,1));
+        dV_norm =  sqrt(dot(dV,dV,1));
         dV2_norm = sqrt(dot(dV2,dV2,1));
         dV3_norm = sqrt(dot(dV3,dV3,1));
+        dV4_norm = sqrt(dot(dV4,dV4,1));
+
     case 'Linfty'
-        dV_norm = max(abs(dV));
+        dV_norm =  max(abs(dV));
         dV2_norm = max(abs(dV2));
         dV3_norm = max(abs(dV3));
-end
-
-switch (myThruster.q)
-    case 'L1'
-        p_norm = sum(abs(p),1);
-    case 'L2'
-        p_norm = sqrt(dot(p,p,1));
-    case 'Linfty'
-        p_norm = max(abs(p));
+        dV4_norm = max(abs(dV4));
 end
 
 % Impulsive times
 ti = dV_norm ~= 0;
+Nopt = sum(ti);
+t_imp = t(ti);
 
 % Results
 cost(1) = -1.0 * myProblem.Cost * Vc;
 cost(2) = sum(dV2_norm) * Vc;
 cost(3) = sum(dV3_norm) * Vc;
-
-Output = myProblem.Report;
+cost(4) = sum(dV4_norm) * Vc;
 
 Time = mean(time, 2);
 
-Nopt = sum(ti);
-error = sqrt( dot(myProblem.e, myProblem.e, 1) ); 
-t_imp = t(ti);
-
 %% Chaser orbit reconstruction 
 % Preallocation 
-s = zeros(length(t), 6 * 3);
-s(1,:) = repmat(x0.', 1, 3);
+s = zeros(length(t), 6 * 4);
+s(1,:) = repmat(x0.', 1, 4);
 
 % Computation
 for i = 1:length(t)
@@ -173,23 +189,24 @@ for i = 1:length(t)
         Phi1 = reshape(STM(:,1+6*(i-2):6*(i-1)), [6 6]);
         Phi2 = reshape(STM(:,1+6*(i-1):6*i), [6 6]);
 
-        for j = 1:3
+        for j = 1:4
             s(i, 1 + 6 * (j-1) : 6 * j) = s(i-1,1 + 6 * (j-1) : 6 * j) * (Phi2 * Phi1^(-1)).';
         end
     end
 
     % Add maneuver
-    s(i,4:6) = s(i,4:6)     + dV (:,i).';
+    s(i,4:6) =   s(i,4:6)   + dV (:,i).';
     s(i,10:12) = s(i,10:12) + dV2(:,i).';
     s(i,16:18) = s(i,16:18) + dV3(:,i).';
+    s(i,22:24) = s(i,22:24) + dV4(:,i).';
 end
 
 % Dimensionalization 
 % s = s .* repmat([Lc Lc Lc Vc * n Vc * n Vc * n], N, 1);
 
 % Error 
-e = zeros(3,1);
-for i = 1:3
+e = zeros(4,1);
+for i = 1:4
     e(i) = sqrt( dot(s(end, 1 + 6 * (i-1):6*i), s(end, 1 + 6 * (i-1):6*i), 2) );
 end
 
@@ -268,6 +285,34 @@ xlabel('$t$ [-]')
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([0 t(end)])
 
+figure
+hold on
+if (dVmax ~= Inf)
+    yline(dVmax, 'k--')
+
+    if (dVmin > 0)
+        yline(dVmin, 'k--')
+        legend('$\Delta V_{max}$', '$\Delta V_{min}$', 'Autoupdate', 'off')
+    else
+        legend('$\Delta V_{max}$', 'Autoupdate', 'off')
+    end
+
+    switch (myThruster.q)
+        case 'Linfty'
+            stem(t, max(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        case 'L1'
+            stem(t, sum(abs(dV3), [], 1) * Vc, 'filled', 'k');
+        otherwise
+    end
+end
+stem(t, dV4_norm * Vc, 'filled'); 
+grid on;
+ylabel('$\|\Delta \mathbf{V}\|_2$ [m/s]')
+xlabel('$t$ [-]')
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([0 t(end)])
+
 siz = repmat(100, 1, 1);
 siz2 = repmat(100, sum(ti), 1);
 figure 
@@ -297,7 +342,7 @@ scatter3(s(ti,1), s(ti,2), s(ti,3), siz2, 'r', 'Marker', 'x');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
 plot3(s(:,1), s(:,2), s(:,3), 'b');
 plot3(s(:,7), s(:,8), s(:,9), 'k'); 
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', '$\mathbf{s}_{opt}$', '$\mathbf{s}_{ls}$');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_{opt}$', '$\mathbf{s}_f$', '$\mathbf{s}_{opt}$', '$\mathbf{s}_{ls}$');
 hold off
 xlabel('$x$')
 ylabel('$y$')
@@ -319,7 +364,30 @@ scatter3(s(ti2,13), s(ti2,14), s(ti2,15), siz2, 'g', 'Marker', 'x');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
 plot3(s(:,1), s(:,2), s(:,3), 'b');
 plot3(s(:,13), s(:,14), s(:,15), 'k'); 
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_{opt}$', '$\Delta \mathbf{V}_{pvt}$', '$\mathbf{s}_f$', '$\mathbf{s}_{opt}$', '$\mathbf{s}_{pvt}$');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_{opt}$', '$\Delta \mathbf{V}_{PS}$', '$\mathbf{s}_f$', '$\mathbf{s}_{opt}$', '$\mathbf{s}_{PS}$');
+hold off
+xlabel('$x$')
+ylabel('$y$')
+zlabel('$z$')
+grid on;
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
+% zticklabels(strrep(zticklabels, '-', '$-$'));
+
+siz2 = repmat(100, sum(ti), 1);
+figure 
+view(3)
+hold on
+scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
+scatter3(s(ti,1), s(ti,2), s(ti,3), siz2, 'r', 'Marker', 'x');
+ti2 = dV4_norm ~= 0;
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti2), 1);
+scatter3(s(ti2,19), s(ti2,20), s(ti2,21), siz2, 'g', 'Marker', 'x');
+scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
+plot3(s(:,1), s(:,2), s(:,3), 'b');
+plot3(s(:,19), s(:,20), s(:,21), 'k'); 
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_{opt}$', '$\Delta \mathbf{V}_{SM}$', '$\mathbf{s}_f$', '$\mathbf{s}_{opt}$', '$\mathbf{s}_{SM}$');
 hold off
 xlabel('$x$')
 ylabel('$y$')

@@ -11,7 +11,7 @@
 close; 
 clear; 
 
-set_graphics();
+utils.set_graphics();
 
 %% Define the target orbit
 % Parameters
@@ -61,8 +61,8 @@ myMission = LinearMission(t, Phi, B, x0, xf, K);        % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 0;                                            % Maximum control authority
-myThruster = thruster('Linfty', dVmin, dVmax);
+dVmax = Inf;                                            % Maximum control authority
+myThruster = thruster('L2', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
@@ -70,15 +70,15 @@ myProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = 1e4;                                        % AL parameter 
+rho = N;                                        % AL parameter 
 
 for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);
     time(i) = myProblem.SolveTime;
 end
-
+%%
 % Pruning
-[dV2, cost] = PVT_pruner(Phi, B, dV);
+[dV2, cost] = RendezvousProblems.GenPotterSolver.PVT_pruner( Phi, B, dV, dVmax, dVmin, 'L2', false );
 
 %% Outcome 
 switch (myThruster.p)
@@ -164,22 +164,3 @@ grid on;
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
-
-%% Auxiliary functions
-% Set graphics
-function set_graphics()
-    %Set graphical properties
-   set(groot, 'defaultAxesTickLabelInterpreter', 'latex'); 
-    set(groot, 'defaultAxesFontSize', 11); 
-    set(groot, 'defaultAxesGridAlpha', 0.3); 
-    set(groot, 'defaultAxesLineWidth', 0.75);
-    set(groot, 'defaultAxesXMinorTick', 'on');
-    set(groot, 'defaultAxesYMinorTick', 'on');
-    set(groot, 'defaultFigureRenderer', 'painters');
-    set(groot, 'defaultLegendBox', 'off');
-    set(groot, 'defaultLegendInterpreter', 'latex');
-    set(groot, 'defaultLegendLocation', 'best');
-    set(groot, 'defaultLineLineWidth', 1); 
-    set(groot, 'defaultLineMarkerSize', 3);
-    set(groot, 'defaultTextInterpreter','latex');
-end

@@ -71,7 +71,7 @@ Nmax = length(nu);
 % nu = linspace(nu_0, nu_f, Nmax);
 
 N0 = 5;
-dN = 1000;
+dN = 100;
 cost = zeros(1, length(N0:dN:Nmax)); 
 Time = cost;
 error = cost;
@@ -249,18 +249,29 @@ ylabel('$z$ [m]')
 grid on;
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
+
 %%
 % Parametric study
 figure
 hold on
 plot(N0:dN:Nmax, log(abs( cost / cost(end) - 1 )), '-o'); 
 grid on;
-ylabel('log $\|\Delta \mathbf{V}\|_2$')
+ylabel('$\tau$')
 xlabel('$N$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([N0 Nmax])
 
+figure 
+hold on
+scatter(Time, log(abs( cost / cost(end) - 1 )), 'filled'); 
+grid on;
+ylabel('$\tau$')
+xlabel('$T$ [s]')
+xticklabels(strrep(xticklabels, '-', '$-$'));
+yticklabels(strrep(yticklabels, '-', '$-$'));
+
+%%
 p = polyfit( (N0:dN:Nmax)/Nmax, Time, 3 );
 figure
 hold on
@@ -273,6 +284,8 @@ xlabel('$N$')
 yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([N0 Nmax])
 ylim([0 max(Time)])
+eq_text = "$p_T = " + num2str(p(1)) + "N^3 + " + num2str(p(2)) + "N^2 + " + num2str(p(3)) + "N + " + num2str(p(4)) + "$";
+text(500, 2.2, eq_text);
 
 figure
 hold on
@@ -284,13 +297,15 @@ xlabel('$N$')
 yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([N0 Nmax])
 
+%% 
+
 figure 
 histogram(nu_dist, 100, 'Normalization', 'probability')
 xlabel('$\theta$ [rad]')
 ylabel('$P[k_1 < \theta < k_2]$')
 xlim([min(nu(1), nuref(1)) max(nu(end), nuref(end))])
 grid on;
-%%
+
 figure
 hold on
 for i = 1:size(p_dist,2)

@@ -4,11 +4,11 @@
 % File: GenPotterSlver.m 
 % Issue: 0 
 
-%% Generalized Potter Rendezvous Solver %% 
+%% Potter Rendezvous Solver %% 
 % Implementation of a object-oriented solver for primal linear rendezvous problems
 % via Potter-Stern solver
 
-classdef GenPotterSolver < RendezvousProblems.SolverRendezvous
+classdef PotterSolver < RendezvousProblems.SolverRendezvous
     % Basic properties
     properties
         t;                          % Execution clocks
@@ -23,7 +23,7 @@ classdef GenPotterSolver < RendezvousProblems.SolverRendezvous
     % Methods
     methods
         % Constructor
-        function [obj] = GenPotterSolver(myMission, myThruster)
+        function [obj] = PotterSolver(myMission, myThruster)
             obj@RendezvousProblems.SolverRendezvous(myMission, myThruster);
         end
 
@@ -32,8 +32,8 @@ classdef GenPotterSolver < RendezvousProblems.SolverRendezvous
     end
 
     methods (Static)
-        [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag);
-        [x, cost, null_flag] = sequence_reduction(m, n, p, q, u, qf, x, lambda, xmax, xmin);
+        [dV, cost] = PVT_pruner(Phi, B, dV, p);
+        [x, cost, null_flag] = sequence_reduction(m, u, x);
     end
 
 end
