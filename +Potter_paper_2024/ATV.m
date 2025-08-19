@@ -119,7 +119,7 @@ myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L2', dVmin, dVmax);
+myThruster = thruster('L1', dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
@@ -172,7 +172,7 @@ for i = 1:length(nu)
 end
 
 % Reference solution 
-[nuref, sref, dV_ref] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf);
+[nuref, sref, dV_ref] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf, myThruster.p);
 
 switch (myThruster.p)
     case 'L1'
@@ -193,12 +193,12 @@ sref = sref / 1e3;
 %% Results 
 figure
 hold on
-stem(nuref, dV_norm_ref * Vc, 'filled', 'c');
+%stem(nuref, dV_norm_ref * Vc, 'filled', 'c');
 stem(nu, dV_norm * Vc, 'filled', Color=[0 0.4470 0.7410]); 
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_1$ [m/s]')
 xlabel('$\theta$')
-legend('Arzelier et al.', 'PS')
+%legend('Arzelier et al.', 'PS')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([min(nu(1), nuref(1)) max(nu(end), nuref(end))])
@@ -210,9 +210,9 @@ hold on
 scatter(s(1,1), s(1,2), siz, 'b', 'Marker', 'square');
 scatter(s(ti,1), s(ti,2), siz2, 'r', 'Marker', 'x');
 scatter(s(end,1), s(end,2), siz, 'b', 'Marker', 'o');
-plot(sref(:,1), sref(:,2), 'c', 'LineWidth', 0.2); 
+% plot(sref(:,1), sref(:,2), 'c', 'LineWidth', 0.2); 
 plot(s(:,1), s(:,2), 'b', 'LineWidth', 1); 
-legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', '$\mathbf{s}_{ref}$', '$\mathbf{s}_{PS}$', 'AutoUpdate', 'off');
+legend('$\mathbf{s}_0$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}_f$', 'AutoUpdate', 'off');
 hold off
 xlabel('$x$ [km]')
 ylabel('$z$ [km]')
@@ -289,14 +289,17 @@ function [nu_f] = InverseKeplerEquation(n, e, M0, dt)
     nu_f = mod(nu_f,2*pi);
 end
 
-function [nu, sref, dV] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf) 
+function [nu, sref, dV] = ReferenceSolution(Orbit_t, mu, h, n, Vc, x0, xf, p) 
     % Reference solution Arzelier et al., 2016
-    if (1)
-        % L2 problem
-        nu_ref = [0 1.3872 6.6639 8.1832];                                % Impulsive locations
-    else
+    switch (p)
+    case 'L1'
         % L1 problem
         nu_ref = [0 1.3352 6.7087 8.1832];                                % Impulsive locations
+    case 'L2'
+        % L2 problem
+        nu_ref = [0 1.3872 6.6639 8.1832];                                % Impulsive locations
+    case 'Linfty'
+        error();
     end
 
     % Complete the domain

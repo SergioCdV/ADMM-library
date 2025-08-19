@@ -71,7 +71,7 @@ myProblem = RendezvousProblems.CarterSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = 1/N^2;                                      % AL parameter 
+rho = N^3;                                      % AL parameter 
 
 for i = 1:iter
     [~, sol, ~, myProblem2] = myProblem.Solve(rho);
@@ -83,7 +83,7 @@ dV = sol(1:3,:);
 p = sol(4:6,:);
 
 % Pruning
-[dV2, cost] = PVT_pruner(STM, [zeros(3); eye(3)], dV, 'L2');
+[dV2, cost] = RendezvousProblems.PotterSolver.PVT_pruner( Phi, B, dV, 'L2' );
 
 %% Outcome 
 switch (myThruster.p)
@@ -141,14 +141,13 @@ end
 
 %% Results 
 figure
-hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+loglog(1:Output.Iterations, Output.objval * Vc); 
 grid on;
 ylabel('$\Delta V_T$ [m/s]')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-
+%%
 figure
 hold on
 scatter(t_imp, ones(1,length(t_imp)), 1e2, 'r', 'Marker', 'x')

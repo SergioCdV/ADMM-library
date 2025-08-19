@@ -74,7 +74,6 @@ function [dV, cost] = PVT_pruner(Phi, B, dV, dVmax, dVmin, p, equil_flag)
             error('No valid thruster configuration was selected');
     end
     cost = sum(cost);
-    
 
     if (num_sequence >= 0)
         if (size(B,2) == size(dV,1))
@@ -171,13 +170,15 @@ function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
                 
     % Final dynamic matrix
     M = Phi(:,end-m+1:end);
-
+    
+    % Compute the linear matrix associated to the problem
     u = zeros(m,N);
     for i = 1:N
         R = M * ( Phi(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
         u(:,i) = R * dV(1:n,i);
     end
 
+    % Take the thrusting directions
     Idx = Vnorm ~= 0;                         % Non-zero elements
     u(:,Idx) = u(:,Idx) ./ Vnorm(Idx);        % Normal costs
 
@@ -235,7 +236,6 @@ function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     end
     
     if (any(dVmin > 0))
-
         % Equilibration of the bounds
         dVmin = dVmin .* D1(1,end-N+1:end);
 
@@ -246,6 +246,7 @@ function [V, qf, A, b, D2] = L2_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
             V = [V; ...
                  -(V(1,:) *  A(end-N+1:end,1:N).' - dVmin) / A(end-N+1:end,end-N+1:end).'];
 
+            % Additional constraining
             b = [b; dVmin.'];          % Complete independent term
         end
     end
@@ -261,39 +262,32 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     % Final dynamic matrix
     M = Phi(:,end-m+1:end);
 
+    % Compute the linear system associated to the problem
     u = zeros(m, n * N);
     for i = 1:N
         R = M * ( Phi(:,1+m*(i-1):m*i) \ B(:,1+n*(i-1):n*i) );
         u(:,1 + n * (i-1) : n * i) = R;
     end
 
-    A = [u -u];                                      % Constrains matrix
-    qf = ones(2 * n * N,1);                          % Linear cost function
-    b = zeros(m,1);                                  % Independent term
+    A = [u -u];                              % Dynamics constraints matrix
+    qf = ones(2 * n * N,1);                  % Linear cost function
+    b = zeros(m,1);                          % Independent term
+
+    InN = +eye(n*N);
+    OnN = zeros(n*N);
 
     if (any(dVmax ~= Inf))      
-        A = [A zeros(size(A,1),2*n*N); ...                             % Dynamics
-             +eye(n*N) -eye(n*N) eye(n*N,n*N) zeros(n*N,n*N);          % Epigraph form
-             -eye(n*N) +eye(n*N) zeros(n*N,n*N) eye(n*N,n*N);          % Epigraph form
-             ]; 
+        A = [A zeros(size(A,1),2*n*N); ...   % Dynamics
+             +InN -InN InN OnN; ...          % Epigraph form
+             -InN +InN OnN InN];             % Epigraph form
 
-        qf = [qf; zeros(2*n*N,1)];                                     % Complete cost function
-        b = [b; zeros(2*n*N,1)];                                       % Complete cost function
+        qf = [qf; zeros(2*n*N,1)];           % Complete cost function
+        b  = [b;  zeros(2*n*N,1)];           % Complete cost function
     end
 
     if (any(dVmin > 0))
-        if (any(dVmax ~= Inf))
-            A = [A zeros(size(A,1),2*n*N); ...
-                zeros(n*N,4*n*N) eye(n*N) zeros(n*N); ...
-                zeros(n*N,4*n*N) zeros(n*N) eye(n*N)];                     % Lower bound constraint
-        else
-            A = [A zeros(size(A,1),2*n*N); ...                             % Dynamics
-                 +eye(n*N) -eye(n*N) eye(n*N,n*N) zeros(n*N,n*N);          % Epigraph form
-                 -eye(n*N) +eye(n*N) zeros(n*N,n*N) eye(n*N,n*N);          % Epigraph form
-                 ]; 
-        end
-        qf = [qf; zeros(2*n*N,1)];                                     % Complete cost function
-        b = [b; zeros(2*n*N,1)];                                       % Complete cost function
+        % The problem is not convex here 
+        error('The input problem is not convex. Aborting...');
     end
 
     % Equilibration
@@ -308,55 +302,35 @@ function [V, qf, A, b, D2] = L1_preparation(Phi, B, dV, dVmax, dVmin, equil_flag
     B = reshape(dV, 1, n * N);
 
     V = zeros(2, size(B,1));
-    V(1, B > 0) = + 1 * B(B > 0);
-    V(2, B < 0) = - 1 * B(B < 0);
+    V(1, B >= 0) = + 1 * B(B >= 0);                         % Positive part of the decision variables
+    V(2, B < 0) = - 1 * B(B < 0);                           % Negative part of the decision variables
 
     V(1,:) = V(1,:) .* D2(1,1:N*n);
     V(2,:) = V(2,:) .* D2(1,N*n+1:2*N*n);
     
     v = [V(1,:) V(2,:)];
-    V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Basis pursuit formulation
+    V = [reshape(V(1,:), n, N); reshape(V(2,:), n, N)];     % Final decision vector
 
-    Vnorm = max(abs( reshape(B, n, N) ), [], 1);
+    % Constraints
+    Vnorm = max(abs(dV), [], 1);                            % Infinity norm of the original solution
 
     if (any(dVmax ~= Inf))
-        
         if (any(Vnorm > dVmax))
             error('Pruner cannot continue. Infeasible initial solution detected.')
         else
             % Equilibration of the bounds
-            dVmax = repmat(dVmax,1,2*n) .* D1(1, m+1:m+2*n*N);
+            dVmax = repmat(dVmax,1,2*n) .* D1(1,m+1:m+2*n*N);
 
-            Vplus = ( dVmax(1:n*N) - v * A(m+1:m+n*N,1:2*n*N).') / A(m+1:m+n*N,2*n*N+1:3*n*N).';
-            Vminus = ( dVmax(1:n*N) - v * A(m+n*N+1:m+2*n*N,1:2*n*N).') / A(m+n*N+1:m+2*n*N,3*n*N+1:4*n*N).';
+            dVplus = v * A(m+1:m+n*N,1:2*n*N).';
+            dVminus = -dVplus;
+            Vplus =  ( dVmax(1:n*N) - dVplus )  / A(m+1:m+n*N,2*n*N+1:3*n*N).';
+            Vminus = ( dVmax(1:n*N) - dVminus ) / A(m+n*N+1:m+2*n*N,3*n*N+1:4*n*N).';
 
-            V = [V; ...
-                 reshape(Vplus, n, []); ...              % Epigraph slacks
-                 reshape(Vminus, n, []); ...             % Epigraph slacks
-                 ];      
+            % Compute the slacks variables
+            V = [V; reshape(Vplus, n, []); reshape(Vminus, n, [])];      
 
             % Complete independent term
             b = [b; dVmax.'];             
-        end
-    end
-
-    if (any(dVmin > 0))
-        error('Pruner cannot continue. The problem is non-convex.');
-        
-        if (any(Vnorm < dVmin))
-             error('Pruner cannot continue. Infeasible initial solution detected.')
-        else
-
-            % Equilibration of the bounds
-            dVmin = repmat(dVmin,1,2*n) .* D1(1, end-2*n*N+1:end);
-        
-            % Equilibration of the initial solution
-            V = [V; ...
-                 reshape(-dVmin(1:n*N), n, []) + dV; ...       % Epigraph slacks
-                 reshape(-dVmin(n*N+1:end), n, []) - dV];      % Epigraph slacks
-
-            % Complete independent term
-            b = [b; dVmin.'];                           
         end
     end
 end

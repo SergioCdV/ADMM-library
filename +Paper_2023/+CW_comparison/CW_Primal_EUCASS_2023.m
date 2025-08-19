@@ -76,9 +76,9 @@ for i = 1:iter
     [~, dV, ~, myProblem] = myProblem.Solve(rho);
     time(i) = myProblem.SolveTime;
 end
-%%
+
 % Pruning
-[dV2, cost] = RendezvousProblems.GenPotterSolver.PVT_pruner( Phi, B, dV, dVmax, dVmin, 'L2', false );
+[dV2, cost] = RendezvousProblems.PotterSolver.PVT_pruner( Phi, B, dV, 'L2' );
 
 %% Outcome 
 switch (myThruster.p)
@@ -128,14 +128,13 @@ end
 
 %% Results 
 figure
-hold on
-plot(1:Output.Iterations, Output.objval * Vc); 
+loglog(1:Output.Iterations, Output.objval * Vc); 
 grid on;
 ylabel('$\Delta V_T$ [m/s]')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
-
+%%
 figure
 hold on
 stem(t, dV_norm * Vc * n, 'filled'); 

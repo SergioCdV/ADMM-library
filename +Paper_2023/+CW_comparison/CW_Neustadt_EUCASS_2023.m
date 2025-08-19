@@ -8,7 +8,7 @@
 %% Clohessy-Wiltshire rendezvous %% 
 % Solve for the time-fixed CW optimal Lp problem using ADMM and PVT
 
-close; 
+%close; 
 clear; 
 clc
 
@@ -74,7 +74,7 @@ myProblem = RendezvousProblems.NeustadtSolver(myMission, myThruster);
 
 iter = 1;
 time = zeros(1,iter);
-rho = 1 / N^2;                                              % AL parameter 
+rho = 1 / N;                                              % AL parameter 
 eps = [1e-4; 1e-5];                                     % Numerical tolerance
 
 for i = 1:iter
@@ -88,7 +88,7 @@ p = reshape(sol(7:end), 3, []);
 dV = myProblem.u;
 
 % Pruning
-[dV2, cost] = PVT_pruner(Phi, B, dV);
+[dV2, cost] = RendezvousProblems.PotterSolver.PVT_pruner( Phi, B, dV, 'L2' );
 
 %% Outcome 
 switch (myThruster.p)
@@ -147,10 +147,9 @@ end
 
 %% Results 
 figure
-hold on
-plot(1:Output.Iterations, Output.objval * Vc * n); 
+loglog(1:Output.Iterations, -Output.objval * Vc * n); 
 grid on;
-ylabel('$\mathbf{c}^{T} \mathbf{\lambda}$')
+ylabel('$\vert\mathbf{c}^{T} \mathbf{\lambda}\vert$')
 xlabel('Iteration $i$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));

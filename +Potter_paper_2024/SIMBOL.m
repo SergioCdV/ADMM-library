@@ -121,7 +121,6 @@ for i = 1:length(nu)
     STM(:,1+4*(i-1):4*i) = L(:,1+4*(i-1):4*i)^(-1) * stm * L(:,1:4);
 end
 
-
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
 myMission = LinearMission(nu, STM, B, x0, xf, K);       % Mission
@@ -197,6 +196,9 @@ end
 % Dimensionalization 
 s =    s    .* repmat([Lc Lc Vc Vc], size(s,1), 1);
 sref = sref .* repmat([Lc Lc Vc Vc], size(sref,1), 1);
+
+s = s / 1000;
+sref = sref / 1000;
 
 %% Results 
 figure

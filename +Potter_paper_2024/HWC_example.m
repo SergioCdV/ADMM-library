@@ -352,6 +352,9 @@ xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
 
+%% 
+siz = repmat(100, 1, 1);
+siz2 = repmat(100, sum(ti), 1);
 figure 
 view(3)
 hold on
@@ -374,6 +377,7 @@ xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 % zticklabels(strrep(zticklabels, '-', '$-$'));
 
+%%
 siz2 = repmat(100, sum(ti), 1);
 figure 
 view(3)
