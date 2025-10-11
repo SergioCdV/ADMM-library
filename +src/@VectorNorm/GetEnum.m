@@ -10,7 +10,7 @@
 
 function [enum] = GetEnum( myNum )
     
-    allEnums = enumeration('VectorNorm');     
+    allEnums = enumeration('src.VectorNorm');     
     allVals  = double(allEnums);         
 
     idx = find(allVals == myNum, 1, 'first');

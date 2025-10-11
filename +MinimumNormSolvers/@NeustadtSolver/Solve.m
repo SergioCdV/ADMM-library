@@ -73,7 +73,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha)
         c = zeros(m + n * N,1);
     
         % Problem
-        Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
+        Problem = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
     
         if (~exist('alpha', 'var'))
             alpha = 1;

@@ -8,7 +8,7 @@
 %% Half-space Proximal operator %%
 % This function defines the proximal operator of a half space
 
-classdef HalfSpaceProx < Methods.ProxOperator
+classdef HalfSpaceProx < src.ProxOperator
     methods
         % Constructor 
         function [obj] = HalfSpaceProx(a, b, rho)
@@ -16,7 +16,7 @@ classdef HalfSpaceProx < Methods.ProxOperator
                 rho = 1;
             end
 
-            obj = obj@Methods.ProxOperator( @(x)HalfSpaceProx.projection(a, b, x), rho )
+            obj = obj@src.ProxOperator( @(x)HalfSpaceProx.projection(a, b, x), rho )
         end
     end
 

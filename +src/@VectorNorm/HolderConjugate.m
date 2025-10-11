@@ -9,6 +9,6 @@
 % This function computes the Holder conjugate to a given vector norm
 
 function [conj] = HolderConjugate( obj )
-    conj = 1 / ( 1 - double(obj) ); 
+    conj = 1 / ( 1 - 1/double(obj) ); 
     conj = obj.GetEnum( conj );
 end

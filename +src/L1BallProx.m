@@ -8,7 +8,7 @@
 %% L1-ball Proximal operator %%
 % This function defines the proximal operator of an L1-norm ball
 
-classdef L1BallProx < Methods.ProxOperator
+classdef L1BallProx < src.ProxOperator
     methods
         % Constructor 
         function [obj] = L1BallProx(a, rho)
@@ -16,7 +16,7 @@ classdef L1BallProx < Methods.ProxOperator
                 rho = 1;
             end
 
-            obj = obj@Methods.ProxOperator( @(x)L1BallProx.projection(a, x), rho );
+            obj = obj@src.ProxOperator( @(x)L1BallProx.projection(a, x), rho );
         end
     end
 

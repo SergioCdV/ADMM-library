@@ -68,19 +68,19 @@ end
 
 %% Final mission definition 
 K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
+myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myDualProblem   = RendezvousProblems.NeustadtSolver(myMission, myThruster);
-myPrimalProblem = RendezvousProblems.PrimalSolver(myMission, myThruster);
+myDualProblem   = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
+myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
 
-iter = 25;                           % Number of interations
+iter = 1;                           % Number of interations
 time = zeros(2,iter);               % Computational cost
 dV = zeros(3 * 2, N);               % Impulses of the two algorithms
 
@@ -104,29 +104,11 @@ end
 
 %% Outcome
 % Cost function
-switch (myThruster.p)
-    case 'L1'
-        dV_norm(1,:) = sum( abs(dV(1:3,:) ), 1);
-        dV_norm(2,:) = sum( abs(dV(4:6,:) ), 1);
-
-    case 'L2'
-        dV_norm(1,:) = sqrt( dot(dV(1:3,:), dV(1:3,:), 1) );
-        dV_norm(2,:) = sqrt( dot(dV(4:6,:), dV(4:6,:), 1) );
-
-    case 'Linfty'
-        dV_norm(1,:) = max( abs( dV(1:3,:) ) );
-        dV_norm(2,:) = max( abs( dV(4:6,:) ) );
-end
+dV_norm(1,:) = myThruster.p.ComputeVectorNorm( dV(1:3,:) );
+dV_norm(2,:) = myThruster.p.ComputeVectorNorm( dV(4:6,:) );
 
 % Norm of the primer vector 
-switch (myThruster.q)
-    case 'L1'
-        p_norm = sum( abs(p), 1 );
-    case 'L2'
-        p_norm = sqrt( dot(p, p, 1) );
-    case 'Linfty'
-        p_norm = max( abs(p) );
-end
+p_norm = myThruster.q.ComputeVectorNorm( p );
 
 % Impulsive times 
 ti(1,:) = dV_norm(1,:) ~= 0;
@@ -172,7 +154,7 @@ dim = [Lc Lc Lc Vc Vc Vc];
 s = s .* repmat([dim dim], N, 1) / 1e3;
 
 %% Save results 
-save +Paper_CR3BP_2025\+Serra2018\ResultsSerraL2
+save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2
 
 %% Results 
 % Norm of the primer vector

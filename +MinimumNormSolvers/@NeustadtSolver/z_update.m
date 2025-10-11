@@ -21,14 +21,14 @@ function [z] = z_update(indices, q, Phi, b, rho, x, z, u)
 
         % Projection of the primer vector on the unit lq-ball
         switch (q)
-            case VectorNorm.L1
-                p(sel) = Methods.L1BallProx.projection(1, p(sel));
+            case src.VectorNorm.L1
+                p(sel) = src.L1BallProx.projection(1, p(sel));
 
-            case VectorNorm.L2
-                p(sel) = Methods.L2BallProx.projection(1, p(sel));
+            case src.VectorNorm.L2
+                p(sel) = src.L2BallProx.projection(1, p(sel));
 
-            case VectorNorm.Linf
-                p(sel) = Methods.LinfBallProx.projection(1, p(sel));
+            case src.VectorNorm.Linfty
+                p(sel) = src.LinfBallProx.projection(1, p(sel));
         end
                    
         start_ind = indices(i) + 1;
@@ -36,7 +36,7 @@ function [z] = z_update(indices, q, Phi, b, rho, x, z, u)
 
     % Lagrange multiplier update (projection on a half space)
     lambda = x(1:m) + u(1:m);
-    lambda = Methods.HalfSpaceProx.projection(b, 0, lambda);
+    lambda = src.HalfSpaceProx.projection(b, 0, lambda);
 
     % Final vector
     z = [lambda; p];

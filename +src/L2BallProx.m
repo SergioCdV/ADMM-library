@@ -8,7 +8,7 @@
 %% L2-ball Proximal operator %%
 % This function defines the proximal operator of an L2-norm ball
 
-classdef L2BallProx < Methods.ProxOperator
+classdef L2BallProx < src.ProxOperator
     methods
         % Constructor 
         function [obj] = L2BallProx(a, rho)
@@ -16,7 +16,7 @@ classdef L2BallProx < Methods.ProxOperator
                 rho = 1;
             end
 
-            obj = obj@Methods.ProxOperator( @(x)L2BallProx.projection(a, x), rho );
+            obj = obj@src.ProxOperator( @(x)L2BallProx.projection(a, x), rho );
         end
     end
 
@@ -26,7 +26,11 @@ classdef L2BallProx < Methods.ProxOperator
             norm = sqrt( dot(x, x, 1) );
             y = x;
             idx = norm ~= 0 & norm > a;
-            y(idx) =  a * x(:,idx) ./ norm(idx);
+            
+            if ( ~isempty(norm(idx)) )
+                u = x(:,idx) ./ norm(idx);
+                y(:,idx) =  a * u;
+            end
         end
     end
 end

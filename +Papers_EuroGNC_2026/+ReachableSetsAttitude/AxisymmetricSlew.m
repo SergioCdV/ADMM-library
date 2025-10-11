@@ -41,67 +41,51 @@ STM = zeros(7, 7 * N);
 for i = 1:N 
     idx = 1 + 7 * (i-1) : 7 * i;
     delta_t = nu(i) - nu(1);
-    STM(:,idx) = Paper_Attitude_EuroGNC_2025.SlewSTM(b, omega0, r0, delta_t);
+    STM(:,idx) = Papers_EuroGNC_2026.ReachableSetsAttitude.SlewSTM(b, omega0, r0, delta_t);
 end
 
 %% Define the rendezvous problem and the STM %%
 % Control input matrix
-B = [zeros(4); eye(3)];
+B = [zeros(4,3); eye(3)];
 B = repmat( B, 1, length(nu) );
 
 %% Final mission definition 
-K = Inf;                                                % Maximum number of impulses
-myMission = LinearMission(nu, Phi, B, x0, xf, K);       % Mission
+K = Inf;                                                       % Maximum number of impulses
+myMission = Missions.FuelMission(nu, STM, B, x0.', xf.', K);   % Mission
 
 %% Thruster definition 
-dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
-myThruster = thruster('L1', dVmin, dVmax);
+dVmin = 0;                                                     % Minimum control authority
+dVmax = Inf;                                                   % Maximum control authority
+myActuator = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myDualProblem = MinimumTimeSolvers.NeustadtSolver(myMission, myActuator);
+myDualProblem = MinimumNormSolvers.NeustadtSolver(myMission, myActuator);
 
-iter = 25;                          % Number of interations
-time = zeros(2,iter);               % Computational cost
-dV = zeros(3 * 2, N);               % Impulses of the two algorithms
+iter = 1;                          % Number of interations
+time = zeros(1,iter);              % Computational cost
+dV = zeros(3, N);                  % Impulses of the two algorithms
 
 % Optimization
-rho = 1/N;                          % AL parameter 
-eps = [1e-6; 1e-5];                 % Numerical tolerance
+rho = 1/N;                         % AL parameter 
+eps = [1e-6; 1e-5];                % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
+    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho);
     time(1,i) = myDualProblemSolved.SolveTime;
 
-    lambda = reshape(sol(1:6), 6, []);
-    p = reshape(sol(7:end), 3, []);
+    lambda = reshape(sol(1:7), 7, []);
+    p = reshape(sol(8:end), 3, []);
     dV(1:3,:) = myDualProblemSolved.u;
 end
 
 %% Outcome
 % Cost function
-switch (myActuator.p)
-    case 'L1'
-        dV_norm(1,:) = sum( abs(dV(1:3,:) ), 1);
-
-    case 'L2'
-        dV_norm(1,:) = sqrt( dot(dV(1:3,:), dV(1:3,:), 1) );
-
-    case 'Linfty'
-        dV_norm(1,:) = max( abs( dV(1:3,:) ) );
-end
+dV_norm = myActuator.p.ComputeVectorNorm( dV(1:3,:) );
 
 % Norm of the primer vector 
-switch (myActuator.q)
-    case 'L1'
-        p_norm = sum( abs(p), 1 );
-    case 'L2'
-        p_norm = sqrt( dot(p, p, 1) );
-    case 'Linfty'
-        p_norm = max( abs(p) );
-end
+p_norm = myActuator.q.ComputeVectorNorm( p );
 
 % Impulsive times 
 ti(1,:) = dV_norm(1,:) ~= 0;
@@ -114,31 +98,31 @@ error(1,:) = sqrt( dot(myDualProblemSolved.e, myDualProblemSolved.e, 1) );
 
 %% Chaser orbit reconstruction 
 % Preallocation 
-s = zeros(length(nu), 6);
-s(1,:) = [x0.'];
+s = zeros(length(nu), 7);
+s(1,:) = x0.';
 
 % Computation
 for i = 1:length(nu)
     % Propagate 
     if (i > 1)
-        prev_idx = 1 + 6 * (i - 2) : 6 * (i - 1);
-        curr_idx = 1 + 6 * (i - 1) : 6 * (i - 0);
+        prev_idx = 1 + 7 * (i - 2) : 7 * (i - 1);
+        curr_idx = 1 + 7 * (i - 1) : 7 * (i - 0);
 
-        Phi1 = reshape(STM(:,prev_idx), [6 6]);
-        Phi2 = reshape(STM(:,curr_idx), [6 6]);
+        Phi1 = reshape(STM(:,prev_idx), [7 7]);
+        Phi2 = reshape(STM(:,curr_idx), [7 7]);
 
-        state_idx = 1:6;
+        state_idx = 1:7;
         s(i,state_idx) = s(i-1,state_idx) * (Phi2 * Phi1^(-1)).';
     end
     
     % Add maneuver
-    cntrl_indx = 4:6;
+    cntrl_indx = 5:7;
     plan_idx = 1:3;
     s(i,cntrl_indx) = s(i,cntrl_indx) + dV(plan_idx,i).';
 end
 
 %% Save results 
-save +Paper_Attitude_2025\MinTimeL2
+save +Papers_EuroGNC_2026\MinTimeL2
 
 %% Results 
 % Norm of the primer vector

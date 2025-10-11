@@ -55,7 +55,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     c = zeros(n * N,1);
 
     % Problem
-    Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
+    Problem = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
 
     if (~exist('alpha', 'var'))
         alpha = 1;
@@ -71,26 +71,8 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     % Output 
     dV = reshape(x(:,end), n, []);  % Control sequence
     u = dV; 
-
-%     k = 1;
-%     for i = 1:size(x,2)
-%         dv = reshape(x(:,i), n, []);
-%         dVs(:,k) = sqrt(dot(dv,dv,1));
-%         k = k+1;
-%     end
-% 
-%     figure 
-%     stem3(1:size(x,2),t,dVs, 'LineStyle','none');
-
-    switch (obj.Actuator.p)
-        case 'L2'
-            obj.Cost = sqrt( dot(dV,dV,1) );
-        case 'L1'
-            obj.Cost = sum( abs(dV), 1 );
-        case 'Linfty'
-            obj.Cost = max( abs(dV), [], 1 );
-    end
-
+    
+    obj.Cost = obj.Actuator.p.ComputeVectorNorm( dV );
     obj.Cost = sum(obj.Cost);
 
     obj.Report = Output;                 % Optimization report

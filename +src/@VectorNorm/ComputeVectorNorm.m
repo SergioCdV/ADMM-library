@@ -12,13 +12,13 @@
 function [norm] = ComputeVectorNorm( obj, myVector )
     % Compute the norm
     switch (obj)
-        case VectorNorm.L2
+        case src.VectorNorm.L2
             norm = sqrt( dot(myVector, myVector, 1) );
             
-        case VectorNorm.L1
+        case src.VectorNorm.L1
             norm = sum( abs(myVector), 1 );
 
-        case VectorNorm.Linfty
+        case src.VectorNorm.Linfty
             norm = max( abs(myVector), [], 1 );
     end
 end

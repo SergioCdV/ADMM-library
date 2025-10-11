@@ -8,7 +8,7 @@
 %% Linf-ball Proximal operator %%
 % This function defines the proximal operator of an Linf-norm ball
 
-classdef LinfBallProx < Methods.ProxOperator
+classdef LinfBallProx < src.ProxOperator
     methods
         % Constructor 
         function [obj] = LinfBallProx(a, rho)
@@ -16,7 +16,7 @@ classdef LinfBallProx < Methods.ProxOperator
                 rho = 1;
             end
 
-            obj = obj@Methods.ProxOperator( @(x)LinfBallProx.projection(a, x), rho );
+            obj = obj@src.ProxOperator( @(x)LinfBallProx.projection(a, x), rho );
         end
     end
 

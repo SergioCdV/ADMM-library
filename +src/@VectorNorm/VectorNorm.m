@@ -11,8 +11,8 @@
 
 classdef VectorNorm < double
    enumeration
-       L2     (0)
        L1     (1)
+       L2     (2)
        Linfty (Inf)
    end
 
