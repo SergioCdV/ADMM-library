@@ -39,50 +39,37 @@ x0 = x0.';
 xf = xf.';
 
 % Number of possible impulses 
-N = 100;
+N = 30;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
-nu = linspace(nu_0, nu_f, N);
-
-% State space matrix 
-c2 = 3.190425213622208;
-Omega = 2 * [0 1 0; -1 0 0; 0 0 0];             % Coriolis term
-H = [1+2*c2 0 0; 0 1-c2 0; 0 0 -c2];            % Hessian of the Hamiltonian
-A = [zeros(3) eye(3); H Omega];                 % State space matrix
+nu = linspace(0, 1, N);
 
 % Control input matrix
 B = [zeros(3); eye(3)];
 B = repmat( B, 1, length(nu) );
 
-% Pre-allocation
-Phi = zeros(6, 6 * N);
-STM = zeros(6, 6 * N);
+c2 = 3.190425213622208;
 
-for i = 1:length(nu)
-    idx = 1 + 6 * (i-1) : 6 * i;
-    dt = nu(i) - nu(1);
-    STM(:,idx) = expm( A * dt );
-    Phi(:,idx) = STM(:,idx);
-end
+% Pre-allocation
+STM = @(nu_f)wrapper_STM(c2, nu_0, nu_f, N);
 
 %% Final mission definition 
-K = Inf;                                                % Maximum number of impulses
-myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
+K = Inf;                                                       % Maximum number of impulses
+myMission = Missions.TimeMission(nu, nu_0, STM, B, x0, xf, K); % Mission
 
 %% Thruster definition 
-dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
+dVmin = 0;                                                     % Minimum control authority
+dVmax = 0.8;                                                   % Maximum control authority
 myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myDualProblem   = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
-myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
+myDualProblem   = MinimumTimeSolvers.NeustadtSolver(myMission, myThruster);
 
 iter = 1;                           % Number of interations
-time = zeros(2,iter);               % Computational cost
-dV = zeros(3 * 2, N);               % Impulses of the two algorithms
+time = zeros(1,iter);               % Computational cost
+dV = zeros(3 * 1, N);               % Impulses of the two algorithms
 
 % Optimization
 rho = 1/N;                          % AL parameter 
@@ -90,46 +77,39 @@ eps = [1e-6; 1e-5];                 % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
+    [~, sol, ~, tf, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
     time(1,i) = myDualProblemSolved.SolveTime;
 
     lambda = reshape(sol(1:6), 6, []);
     p = reshape(sol(7:end), 3, []);
     dV(1:3,:) = myDualProblemSolved.u;
-
-    % Primal resolution
-    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
-    time(2,i) = myPrimalProblemSolved.SolveTime;
 end
 
 %% Outcome
 % Cost function
 dV_norm(1,:) = myThruster.p.ComputeVectorNorm( dV(1:3,:) );
-dV_norm(2,:) = myThruster.p.ComputeVectorNorm( dV(4:6,:) );
 
 % Norm of the primer vector 
 p_norm = myThruster.q.ComputeVectorNorm( p );
 
 % Impulsive times 
 ti(1,:) = dV_norm(1,:) ~= 0;
-ti(2,:) = dV_norm(2,:) >= 0.01 * max(dV_norm(2,:));
 
 % Results
 cost(1) = sum(dV_norm(1,ti(1,:)), 2) * Vc;
-cost(2) = sum(dV_norm(2,ti(2,:)), 2) * Vc;
+
 Nopt = sum(ti, 2);
 Time = mean(time, 2);
 error(1,:) = sqrt( dot(myPrimalProblemSolved.e, myPrimalProblemSolved.e, 1) );
-error(2,:) = sqrt( dot(myDualProblemSolved.e, myDualProblemSolved.e, 1) );
 
 %% Chaser orbit reconstruction 
 % Preallocation 
-s = zeros(length(nu), 6 * 2);
-s(1,:) = [x0.' x0.'];
+s = zeros(length(nu), 6 * 1);
+s(1,:) = [x0.'];
 
 % Computation
 for i = 1:length(nu)
-    for j = 1:2
+    for j = 1:1
         % Propagate 
         if (i > 1)
             prev_idx = 1 + 6 * (i - 2) : 6 * (i - 1);
@@ -151,10 +131,10 @@ end
 
 % Dimensionalization 
 dim = [Lc Lc Lc Vc Vc Vc];
-s = s .* repmat([dim dim], N, 1) / 1e3;
+s = s .* repmat(dim, N, 1) / 1e3;
 
 %% Save results 
-% save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2
+save +Papers_EuroGNC_2026\+RendezvousCR3BP\MinTimeResultsSerraL2
 
 %% Results 
 % Norm of the primer vector
@@ -174,8 +154,7 @@ xlim([nu(1) nu(end)])
 figure
 hold on
 stem(nu, dV_norm(1,:) * Vc, 'filled', 'r'); 
-stem(nu, dV_norm(2,:) * Vc, 'filled', 'b');
-legend('Neustadt', 'Direct', 'AutoUpdate', 'off')
+legend('Neustadt', 'AutoUpdate', 'off')
 grid on;
 ylabel('$\|\Delta \mathbf{V}\|_p$ [m/s]')
 xlabel('$t$')
@@ -191,7 +170,7 @@ scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
 
 
-for j = 1:2
+for j = 1:1
     % Plot each trajectory and the corresponding control law
     siz2 = repmat(100, sum(ti(j,:)), 1);
     state_idx = [1 2 3] + 6 * (j - 1);
@@ -200,7 +179,7 @@ for j = 1:2
     scatter3( s(impulses,state_idx(1)), s(impulses,state_idx(2)), s(impulses,state_idx(3)), siz2, 'Marker', 'x' );
     plot3( s(:,state_idx(1)), s(:,state_idx(2)), s(:,state_idx(3)) ); 
 end 
-legend('$\mathbf{s}_0$', '$\mathbf{s}_f$', '$\Delta \mathbf{V}_i^N$', 'Neustadt', '$\Delta \mathbf{V}_i^D$', 'Direct', 'AutoUpdate', 'off');
+legend('$\mathbf{s}_0$', '$\mathbf{s}_f$', '$\Delta \mathbf{V}_i^N$', 'Neustadt', 'AutoUpdate', 'off');
 
 hold off
 grid on;
@@ -210,3 +189,29 @@ zlabel('$z$ [km]')
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 zticklabels(strrep(zticklabels, '-', '$-$'));
+
+
+%% Auxiliary function 
+function [Phi] = wrapper_STM(c2, nu_0, nu_f, N)
+    % Pre-allocation
+    Phi = zeros(6, 6 * N);
+    STM = zeros(6, 6 * N);
+
+    nu = linspace(nu_0, nu_f, N);
+    
+    for i = 1:length(nu)
+        idx = 1 + 6 * (i-1) : 6 * i;
+        dt = nu(i) - nu(1);
+        STM(:,idx) = CR3BP_STM(c2, dt);
+        Phi(:,idx) = STM(:,idx);
+    end
+end
+
+function [Phi] = CR3BP_STM(c2, delta_t)
+    % State space matrix 
+    Omega = 2 * [0 1 0; -1 0 0; 0 0 0];             % Coriolis term
+    H = [1+2*c2 0 0; 0 1-c2 0; 0 0 -c2];            % Hessian of the Hamiltonian
+    A = [zeros(3) eye(3); H Omega];                 % State space matrix
+    
+    Phi = expm(A * delta_t);
+end

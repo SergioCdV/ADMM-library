@@ -27,7 +27,7 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
         end
 
         % Solver
-        [t, u, e, obj] = Solve(obj, rho, alpha);
+        [t, u, e, obj] = Solve(obj, epsilon, rho, alpha);
     end
 
     % ADMM functions

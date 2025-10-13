@@ -11,7 +11,7 @@
 function [z] = z_update(indices, umin, umax, K, rho, x, z, u) 
     % Fuel consumption L1 minimization
     y = x + u;
-    z = l1_shrinkage(1/rho, y);
+    z = src.MinL1Prox.projection( 1/rho, y );
 
     % Maximum control ball projection
     if (umax ~= Inf)
@@ -26,7 +26,7 @@ function [z] = z_update(indices, umin, umax, K, rho, x, z, u)
     % Cardinality constraint
     if (K ~= Inf)
         dV = reshape(z, indices(1), []);
-        cost = sum( abs(dV), 1);
+        cost = src.VectorNorm.L1.ComputeVectorNorm( dV );
     
         [~, pos] = sort( cost, 'descend');
         

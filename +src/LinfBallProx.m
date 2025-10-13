@@ -22,13 +22,12 @@ classdef LinfBallProx < src.ProxOperator
 
     methods (Static)
         % Projection onto an Linf-ball 
-        function [y] = projection(a, x)
-            y = x;
+        function [x] = projection(a, x)
             idx = x < -a; 
-            y(idx) = -a * ones(1,sum(idx)); 
+            x(idx) = -a * ones(1,sum(idx)); 
 
             idx = x > a; 
-            y(idx) = a * ones(1,sum(idx)); 
+            x(idx) = a * ones(1,sum(idx)); 
         end
     end
 end

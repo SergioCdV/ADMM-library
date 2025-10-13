@@ -11,12 +11,6 @@
 classdef NeustadtSolver < MinimumNormSolvers.NeustadtSolver
     % Basic properties
     properties
-        t;                  % Execution clocks
-        u;                  % Impulsive control law
-        e;                  % Final missvector
-        Cost;               % Control law cost
-        SolveTime;          % Elapsed time 
-        Report;             % Optimization report
     end
 
     % Methods
@@ -27,7 +21,7 @@ classdef NeustadtSolver < MinimumNormSolvers.NeustadtSolver
         end
 
         % Solver
-        [t, u, e, obj] = Solve(obj, rho, alpha);
+        [t, u, e, tf, obj] = Solve(obj, rho, alpha);
     end
 
     % ADMM functions

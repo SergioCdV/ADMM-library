@@ -17,26 +17,38 @@
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
 %          - vector e, of dimensions m x 1, the final rendezvous missvector
 
-function [t, u, e, tf, obj] = Solve(obj, epsilon, rho, alpha)
+function [t, u, e, tf, obj] = Solve(obj, epsilon, rho, alpha, beta)
+    % Sanity checks 
+    if ( ~exist('beta', 'var') ) 
+        beta = 0.01;
+    end
 
-    % Compute an initial guess for the minimum time and the control
-    % magnitude
+    if (~exist('alpha', 'var'))
+        alpha = 1;
+    end
 
     % Continuate on the q-bound to reach the minimum time
-    GoOn    = True;                       % Boolean to control the continuation process
+    GoOn    = true;                       % Boolean to control the continuation process
     iter    = 1;                          % Initial iteration
-    maxIter = 10;                         % Maximum number of iterations
+    maxIter = 100;                         % Maximum number of iterations
     relTol  = 1E-9;                       % Relative assert tolerance
     bound_target = obj.Actuator.umax;     % Target q-norm bound
+    
+    tf      = zeros(1, maxIter);          % Pre-allocation of the final mission time
 
-    tf           = zeros(1, maxIter);     % Pre-allocation of the final mission time
+    % Compute an initial guess for the minimum time 
+    tf(1) = obj.Mission.t0 + ( norm(obj.Mission.xf) - norm(obj.Mission.x0) ) / obj.Actuator.umax;
 
     while ( GoOn && iter < maxIter )
         % Update the STM and the mission constants 
+        t   = ( tf(iter) - obj.Mission.t0 ) * obj.Mission.t;
+        Phi = obj.Mission.Phi( tf(iter) );
 
+        fuelMission = Missions.FuelMission( t, Phi, obj.Mission.B, obj.Mission.x0, obj.Mission.xf, obj.Mission.N );
 
         % Call the inner solver 
-        [t, u, e, obj] = Solve@MinimumNormSolvers.NeustadtSolver(obj, rho, alpha);
+        NormSolver   = MinimumNormSolvers.NeustadtSolver(fuelMission, obj.Actuator);
+        [t, u, e, ~] = NormSolver.Solve(epsilon, rho, alpha);
 
         % Compute the bounds 
         qNorm = obj.Actuator.q.ComputeVectorNorm( u );
@@ -47,6 +59,9 @@ function [t, u, e, tf, obj] = Solve(obj, epsilon, rho, alpha)
             
         else
             % Update the guess on the final tf
+            ratio = qNorm / bound_target;
+            tf(iter + 1) = tf(iter) + min(pi, max(obj.Mission.t0, tf(iter) + beta * ratio))
+%             beta = beta * ratio;
 
             % Update all initial guesses 
 

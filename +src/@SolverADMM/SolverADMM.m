@@ -103,7 +103,7 @@ classdef SolverADMM
         function [x, z, Output] = solver(obj)
             SolverCheck = isequal( obj.A, eye(obj.m) ); 
             SolverCheck = SolverCheck && isequal( obj.B, -eye(obj.j) );
-            SolverCheck = SolverCheck && isequal( obj.C, zeros(obj.m) );
+            SolverCheck = SolverCheck && isequal( obj.C, zeros(obj.m,1) );
 
             if ( SolverCheck )
                 [x, z, Output] = obj.eye_solver();

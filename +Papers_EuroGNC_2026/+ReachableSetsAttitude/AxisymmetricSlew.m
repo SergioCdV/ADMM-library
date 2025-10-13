@@ -19,7 +19,7 @@ set_graphics();
 nu_0 = 0;               % Initial clock
 
 % Initial conditions 
-x0 = [0 0 0 1 1 0 0];                  % Initial conditions (attitude + angular velocity)
+x0 = [0 0 0 1 -1 0 1];                  % Initial conditions (attitude + angular velocity)
 xf = [sqrt(2)/2 0 0 sqrt(2)/2 0 0 0];  % Final conditions   (attitude + angular velocity)
 
 % Problem parameters 
@@ -33,25 +33,26 @@ r0 = x0(end);                          % Initial angular velocity along the last
 N = 100;
 
 % Compute the STM across a given time span 
-nu_f = 100; 
+nu_f = 10; 
 nu = linspace(nu_0, nu_f, N);
 
-STM = zeros(7, 7 * N);
+STM = zeros(3, 3 * N);
 
 for i = 1:N 
-    idx = 1 + 7 * (i-1) : 7 * i;
+    idx = 1 + 3 * (i-1) : 3 * i;
     delta_t = nu(i) - nu(1);
-    STM(:,idx) = Papers_EuroGNC_2026.ReachableSetsAttitude.SlewSTM(b, omega0, r0, delta_t);
+    aux = Papers_EuroGNC_2026.ReachableSetsAttitude.SlewSTM(b, omega0, r0, delta_t);
+    STM(:,idx) = aux(5:7,5:7);
 end
 
 %% Define the rendezvous problem and the STM %%
 % Control input matrix
-B = [zeros(4,3); eye(3)];
+B = [eye(3)];
 B = repmat( B, 1, length(nu) );
 
 %% Final mission definition 
 K = Inf;                                                       % Maximum number of impulses
-myMission = Missions.FuelMission(nu, STM, B, x0.', xf.', K);   % Mission
+myMission = Missions.FuelMission(nu, STM, B, x0(5:7).', xf(5:7).', K);   % Mission
 
 %% Thruster definition 
 dVmin = 0;                                                     % Minimum control authority
@@ -72,11 +73,11 @@ eps = [1e-6; 1e-5];                % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho);
+    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, 1/rho);
     time(1,i) = myDualProblemSolved.SolveTime;
 
-    lambda = reshape(sol(1:7), 7, []);
-    p = reshape(sol(8:end), 3, []);
+    lambda = reshape(sol(1:3), 3, []);
+    p = reshape(sol(4:end), 3, []);
     dV(1:3,:) = myDualProblemSolved.u;
 end
 

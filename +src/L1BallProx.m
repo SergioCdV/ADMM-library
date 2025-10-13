@@ -22,7 +22,7 @@ classdef L1BallProx < src.ProxOperator
 
     methods (Static)
         % Projection onto an L1-ball 
-        function [y] = projection(a, x)
+        function [x] = projection(a, x)
             if ( sum( abs(x) ) > a )
                 u = sort(x, 'descend');
                 K = 1:length(x); 
@@ -32,10 +32,7 @@ classdef L1BallProx < src.ProxOperator
 
                 u = u( logical(index) );
                 rho = sum(u - a) / length(u);
-                y = max(x - rho, 0);
-
-            else
-                y = x;
+                x = max(x - rho, 0);
             end
         end
     end

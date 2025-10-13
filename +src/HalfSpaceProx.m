@@ -22,8 +22,8 @@ classdef HalfSpaceProx < src.ProxOperator
 
     methods (Static)
         % Projection onto the halfspace 
-        function [y] = projection(a, b, x)
-            y = x - max( dot(a,x) - b, 0) / dot(a,a) * a;
+        function [x] = projection(a, b, x)
+            x = x - max( dot(a,x) - b, 0) / dot(a,a) * a;
         end
     end
 end

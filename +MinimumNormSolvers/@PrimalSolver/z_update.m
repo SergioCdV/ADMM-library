@@ -9,32 +9,47 @@
 % ADMM problem function to update the Z sequence via proximal minimization
 
 function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
+    % Pre-allocation 
+    y = x + u;
+
+    % Fuel consumption minimization
+    switch (p)
+        case src.VectorNorm.L1
+            hand_ = @(z)src.MinL1Prox.projection( 1/rho, z );
+
+        case src.VectorNorm.L2
+            hand_ = @(z)src.MinL2Prox.projection( 1/rho, z );
+
+        case src.VectorNorm.Linfty
+            hand_ = @(z)src.MinLinftyProx.projection( 1/rho, z );
+    end
+
+    % Maximum control ball projection
+    if (umax ~= Inf)
+        switch q
+            case src.VectorNorm.L1
+                proj_handle_ = @(z)src.L1BallProx.projection( umax, z );
+
+            case src.VectorNorm.L2
+                proj_handle_ = @(z)src.L2BallProx.projection( umax, z );
+
+            case src.VectorNorm.Linfty
+                proj_handle_ = @(z)src.LinftyBallProx.projection( umax, z );
+        end
+    else
+        proj_handle_ = @(z)( z );
+    end
+
     % Impulses update
     start_ind = 1;
     for i = 1:length(indices)
         sel = start_ind:indices(i);
+        
+        % Fuel minimization 
+        z(sel) = hand_( y(sel) ); 
 
-        % Fuel consumption minimization
-        switch (p)
-            case 'L1'
-                z(sel) = l1_shrinkage(x(sel) + u(sel), 1/rho);
-            case 'L2'
-                z(sel) = l2_shrinkage(x(sel) + u(sel), 1/rho);
-            case 'Linfty'
-                z(sel) = lifty_shrinkage(x(sel) + u(sel), 1/rho);
-        end
-
-        % Maximum control ball projection
-        if (umax ~= Inf)
-            switch (q)
-                case 'L1'
-                    z(sel) = l1_bproj(z(sel), umax);
-                case 'L2'
-                    z(sel) = l2_bproj(z(sel), umax);
-                case 'Linfty'
-                    z(sel) = lifty_bproj(z(sel), umax);
-            end
-        end
+        % Control authority (this should be parallel projections really)
+        z(sel) = proj_handle_( z(sel) );
                    
         start_ind = indices(i) + 1;
     end
@@ -42,39 +57,13 @@ function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
     % Cardinality constraint
     if (K ~= Inf)
         dV = reshape(z, indices(1), []);
-        switch (p)
-            case 'L1'
-                cost = sum( abs(dV), 1);
-            case 'L2'
-                cost = sqrt( dot(dV, dV, 1) );
-            case 'Linfty'
-                cost = max(abs(dV), [], 1);
-        end
+        cost = p.ComputeVectorNorm( dV );
     
-        [~, pos] = sort( cost, 'descend');
+        [~, pos] = sort( cost, 'descend' );
         
         index = pos(K+1:end);
         for i = 1:length(index)
             z(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
         end
     end
-end
-
-%% Auxiliary functions
-% Proximal minimization of the L1 norm
-function z = l1_shrinkage(x, kappa)
-    z = x;
-    for i = 1:length(x)
-        z(i) = max(0, x(i)-kappa) - max(0, -x(i)-kappa);
-    end
-end
-
-% Proximal minimization of the L2 norm
-function z = l2_shrinkage(x, kappa)
-    z = max(0, 1 - kappa/norm(x)) * x;
-end
-
-% Proximal minimization of the Lifty norm
-function z = lifty_shrinkage(x, kappa)
-    z = x - kappa * l1_bproj(x/kappa,1);
 end

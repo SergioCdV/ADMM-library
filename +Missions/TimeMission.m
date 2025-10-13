@@ -41,6 +41,8 @@ classdef TimeMission
                 if (myN > 0)
                     obj.N = myN;
                 end
+            else
+                obj.N = length(obj.t);
             end
         end
     end
