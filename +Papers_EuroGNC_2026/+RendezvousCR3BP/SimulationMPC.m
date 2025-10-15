@@ -20,23 +20,24 @@ Lc = 384399e3;          % Characteristic length
 Tc = 2.361e6;           % Characteristic time
 mu = 0.0121505856;      % Gravitational constan of the system
 c2 = 3.190425213622208; % Richardson coefficient
+c2 = 4.284390615378499;
 
 % Dimensionalization (canonical units)
 Vc = Lc / Tc * 2*pi;    % Characteristic velocity 
 
 % Mission time
-nu_0 = 3.322;           % Initial clock
-nu_f = 4.737;           % Final clock
+nu_0 = 0;           % Initial clock
+nu_f = 2.75;           % Final clock
 
 % Initial relative conditions 
-x0 = [6449.40 65117.03 22814.91 -0.0312 0.0392 0.2114];    % Initial conditions
-xf = [59066.09 67728.64 84015.47 -0.1087 0.1616 -0.1730];  % Final conditions
+x0 = [0.824024728136525; 0; -0.054501847320725; 0; 0.164671964079122; 0];          
 
-x0 = x0 ./ [Lc Lc Lc Vc Vc Vc];
-xf = xf ./ [Lc Lc Lc Vc Vc Vc];
+% Final conditions
+xf = [0.823639438925721; 0; +0.043281569720089; 0; 0.152567980892620; 0];
 
-x0 = x0.'; 
-xf = xf.';
+% Co-orbital initial conditions
+x0 = [x0; xf - x0];
+xf = [xf; zeros(6,1)];
 
 % Number of possible impulses 
 N = 100;                        % Number of steps
@@ -48,7 +49,6 @@ K = Inf;
 
 % Control input matrix
 B = [zeros(3); eye(3)];
-B = repmat( B, 1, N );
 
 %% Thruster definition 
 dVmin = 0;       % Minimum control authority
@@ -64,12 +64,14 @@ eps = [1e-6; 1e-5];                                         % Numerical toleranc
 options = odeset('RelTol', 2.25E-14, 'AbsTol', 1E-22);      % Numerical integration
 
 dV_final = [];
+S = [];
 
 while ( N > 0 )
     % Update of the mission
     nu = linspace(nu_0, nu_f, N);
     Phi = wrapper_STM(c2, nu_0, nu_f, N);
-    myMission = Missions.FuelMission(nu, Phi, B, x0(7:end,1), xf(7:end,1), K);
+    Binp = repmat( B, 1, N );
+    myMission = Missions.FuelMission(nu, Phi, Binp, x0(7:end,1), xf(7:end,1), K);
     
     % Pre-allocation of the impulses
     dV = zeros(3,N);                   
@@ -87,18 +89,21 @@ while ( N > 0 )
     
     % Apply the first impulse 
     x0(10:12,1) = x0(10:12,1) + dV(:,1);
+    S = [S x0];
     dV_final = [dV_final dV(:,1)];
 
     % Integration the coasting solution
-    tspan = [nu_0 nu_0 + Th];
-    [~, s] = ode113( @(t,s)cr3bp_equations(mu, t, s), x0, tspan, options );
+    tspan = [nu_0 nu_0 + Ts];
+    [~, s] = ode113( @(t,s)cr3bp_equations(mu, t, s), tspan, x0, options );
     
     % Update the IVP
-    nu_0 = nu_0 + Th;           % Update the initial clock
-    x0 = s(end,7:12);           % New relative initial conditions
+    nu_0 = nu_0 + Ts;           % Update the initial clock
+    x0 = s(end,:).';            % New relative initial conditions
 
     % Update of the MPC loop 
-    N = N - 1;                  % Reduce the number of optimization steps
+%     N = N - 1;                  % Reduce the number of optimization steps
+
+    disp(N)
 end
 
 %% Outcome
@@ -110,11 +115,17 @@ ti = dV_norm ~= 0;
 
 % Results
 cost = sum( dV_norm(1,ti), 2 ) * Vc;
-error = sqrt( dot(myProblemSolved.e, myProblemSolved.e, 1) );
+% error = sqrt( dot(myProblemSolved.e, myProblemSolved.e, 1) );
 Nopt = sum(ti,2);
 
 %% Save results 
 % save +Papers_EuroGNC_2026\+RendezvousCR3BP\MPC_L2
+
+%% Dimensionalizations 
+N = size(S,2);
+dim = [Lc Lc Lc Vc Vc Vc] / 1E3;
+S = S.' .* repmat( [dim dim], N, 1 );
+nu = linspace(nu_0 - N * Ts, nu_f, N);
 
 %% Results 
 figure
@@ -131,11 +142,11 @@ siz = repmat(100, 1, 1);
 figure 
 view(3)
 hold on
-scatter3(s(1,7), s(1,8), s(1,9), siz, 'b', 'Marker', 'square');
-scatter3(s(end,7), s(end,8), s(end,9), siz, 'b', 'Marker', 'o');
+scatter3(S(1,7), S(1,8), S(1,9), siz, 'b', 'Marker', 'square');
+scatter3(S(end,7), S(end,8), S(end,9), siz, 'b', 'Marker', 'o');
 siz2 = repmat(100, sum(ti), 1);
-scatter3( s(ti,7), s(ti,8), s(ti,9), siz2, 'Marker', 'x' );
-plot3( s(:,7), s(:,8), s(:,9) ); 
+scatter3( S(ti,7), S(ti,8), S(ti,9), siz2, 'Marker', 'x' );
+plot3( S(:,7), S(:,8), S(:,9) ); 
 legend('$\mathbf{s}(t_0)$', '$\mathbf{s}(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{s}(t)$', 'AutoUpdate', 'off');
 hold off
 grid on;
@@ -151,11 +162,12 @@ siz2 = repmat(100, sum(ti), 1);
 figure 
 view(3)
 hold on
-scatter3(s(1,1) + s(1,7), s(1,2) + s(1,8), s(1,3) + s(1,9), siz, 'b', 'Marker', 'square');
-scatter3(s(end,1) + s(end,7), s(end,2) + s(end,8), s(end,3) + s(end,9), siz, 'b', 'Marker', 'o');
-scatter3( s(ti,1) + s(ti,1), s(ti,2) + s(ti,8), s(ti,3) + s(ti,9), siz2, 'Marker', 'x' );
-plot3( s(:,1) + s(:,7), s(:,2) + s(:,8), s(:,3) + s(:,9) ); 
-legend('$\mathbf{r}_c(t_0)$', '$\mathbf{r}_c(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{r}_c(t)$', 'AutoUpdate', 'off');
+scatter3( S(1,1) + S(1,7), S(1,2) + S(1,8), S(1,3) + S(1,9), siz, 'b', 'Marker', 'square' );
+scatter3( S(end,1) + S(end,7), S(end,2) + S(end,8), S(end,3) + S(end,9), siz, 'b', 'Marker', 'o' );
+scatter3( S(ti,1) + S(ti,1), S(ti,2) + S(ti,8), S(ti,3) + S(ti,9), siz2, 'Marker', 'x' );
+plot3( S(:,1) + S(:,7), S(:,2) + S(:,8), S(:,3) + S(:,9) ); 
+plot3( S(:,1), S(:,2), S(:,3) );
+legend('$\mathbf{r}_c(t_0)$', '$\mathbf{r}_c(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{r}_c(t)$', '$\mathbf{r}_t(t)$', 'AutoUpdate', 'off');
 hold off
 grid on;
 xlabel('$X$ [km]')
@@ -210,7 +222,7 @@ function [ds] = cr3bp_equations(mu, t, s, u)
     F = F + mup(2) * ( r(4:6,:) ./ R(2,:).^3 - (r_r + r(4:6,:)) ./ sqrt( dot(r_r + r(4:6,:), r_r + r(4:6,:), 1) ).^3 );
  
     % Control force 
-    ds(10:12,:) = ds(10:12,:) + F + u;
+    ds(10:12,:) = ds(10:12,:) + F;
 end
 
 % Compute the STM of the relative CRB3P
