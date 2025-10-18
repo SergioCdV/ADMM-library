@@ -45,7 +45,7 @@ tspan = [nu_0 nu_f];
 [~, St] = ode113(@(t,s)cr3bp_equations(mu, t, s), tspan, xc, options);
 
 % Number of possible impulses 
-N  = 30;                       % Number of steps
+N  = 100;                       % Number of steps
 Ts = (nu_f - nu_0) / N;         % Sampling time
 
 %% Mission definition
@@ -107,8 +107,10 @@ while ( iter <= Ninit )
             dV = dV(:,2:end);
 
             % New initial guess
-            initial_guess.x = initial_guess.x([1:m m+4:end]);
-            initial_guess.z = initial_guess.z([1:m m+4:end]);
+            if ( ~isempty(initial_guess) )
+                initial_guess.x = initial_guess.x([1:m m+4:end]);
+                initial_guess.z = initial_guess.z([1:m m+4:end]);
+            end
         end
     else
         dV = dV(:,end);
@@ -142,7 +144,7 @@ cost = sum( dV_norm, 2 ) * Vc;
 Nopt = sum(ti,2);
 
 %% Save results 
-% save +Papers_EuroGNC_2026\+RendezvousCR3BP\MPC_L2
+save +Papers_EuroGNC_2026\+RendezvousCR3BP\MPC_L2_N1000
 
 %% Dimensionalizations 
 N = size(S,2);
