@@ -16,8 +16,8 @@ set_graphics();
 
 %% Define the target orbit and mission parameters
 % Parameters
-Lc = 384399e3;          % Characteristic length
-Tc = 2.361e6;           % Characteristic time
+Lc = 384399E3;          % Characteristic length [m]
+Tc = 2.361E6;           % Characteristic time [s]
 mu = 0.0121505856;      % Gravitational constan of the system
 c2 = 3.190425213622208; % Richardson coefficient
 c2 = 4.284390615378499;
@@ -29,19 +29,24 @@ Vc = Lc / Tc * 2*pi;    % Characteristic velocity
 nu_0 = 0;           % Initial clock
 nu_f = 2.75;           % Final clock
 
-% Initial relative conditions 
+% Initial target conditions 
 x0 = [0.824024728136525; 0; -0.054501847320725; 0; 0.164671964079122; 0];          
 
-% Final conditions
-xf = [0.823639438925721; 0; +0.043281569720089; 0; 0.152567980892620; 0];
+% Initial chaser conditions
+xc = [0.823639438925721; 0; +0.043281569720089; 0; 0.152567980892620; 0];
 
 % Co-orbital initial conditions
-x0 = [x0; xf - x0];
-xf = [xf; zeros(6,1)];
+x0 = [x0; xc - x0];
+xc = [xc; zeros(6,1)];
+
+% Target orbital propagation 
+options = odeset('RelTol', 2.25E-14, 'AbsTol', 1E-22);      % Numerical integration
+tspan = [nu_0 nu_f];
+[~, St] = ode113(@(t,s)cr3bp_equations(mu, t, s), tspan, xc, options);
 
 % Number of possible impulses 
-N = 100;                        % Number of steps
-Ts = (nu_f - nu_0) / N;
+N  = 30;                       % Number of steps
+Ts = (nu_f - nu_0) / N;         % Sampling time
 
 %% Mission definition
 % Maximum number of impulses
@@ -60,37 +65,59 @@ myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 % myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
 
 % Optimization
-eps = [1e-6; 1e-5];                                         % Numerical tolerance
-options = odeset('RelTol', 2.25E-14, 'AbsTol', 1E-22);      % Numerical integration
+eps = [1e-6; 1e-5];        % Numerical tolerance
+dV_final = zeros(3,N);     % Maneuver sequence
+S = zeros(12,N);           % Realised trajectory
+OptTime = zeros(1, N);     % Optimization time  
+iter = 1;                  % Iteration index
+Ninit = N;                 % Initial number of problems
+m = 6;                     % Dimension of the co-orbital state
 
-dV_final = [];
-S = [];
+% Pre-allocation of the impulses
+dV = zeros(3,N);       
+initial_guess = [];
 
-while ( N > 0 )
-    % Update of the mission
-    nu = linspace(nu_0, nu_f, N);
-    Phi = wrapper_STM(c2, nu_0, nu_f, N);
-    Binp = repmat( B, 1, N );
-    myMission = Missions.FuelMission(nu, Phi, Binp, x0(7:end,1), xf(7:end,1), K);
+while ( iter <= Ninit )
+    if ( N > 1 )
+        % Update of the mission
+        nu = linspace(nu_0, nu_f, N);
+        Phi = wrapper_STM(c2, nu_0, nu_f, N);
+        Binp = repmat( B, 1, N );
+        myMission = Missions.FuelMission(nu, Phi, Binp, x0(7:end,1), xc(7:end,1), K);
+           
+        % Define the ADMM problem 
+        rho = 1 / N;                       % AL parameter 
+        myDualProblem = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
+        
+        % Optimization
+        [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2), 1, initial_guess);
+%     [~, sol, ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
+
+        OptTime(iter) = myDualProblemSolved.SolveTime;
     
-    % Pre-allocation of the impulses
-    dV = zeros(3,N);                   
+        if ( ~isempty( sol ) )
+            % New maneuver sequence
+            dV = myDualProblemSolved.u;
 
-    % Define the ADMM problem 
-    rho = 1 / N;                       % AL parameter 
-    myDualProblem = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
-    
-    % Optimization
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
-    dV(1:3,:) = myDualProblemSolved.u;
+            % New initial guess
+            initial_guess.x = sol([1:m m+4:end]);
+            initial_guess.z = sol([1:m m+4:end]);
+        else
+            % New maneuver sequence
+            dV = dV(:,2:end);
 
-    % Primal resolution
-%     [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
+            % New initial guess
+            initial_guess.x = initial_guess.x([1:m m+4:end]);
+            initial_guess.z = initial_guess.z([1:m m+4:end]);
+        end
+    else
+        dV = dV(:,end);
+    end
     
-    % Apply the first impulse 
-    x0(10:12,1) = x0(10:12,1) + dV(:,1);
-    S = [S x0];
-    dV_final = [dV_final dV(:,1)];
+    % Apply the impulse 
+    x0(10:12,1)      = x0(10:12,1) + dV(:,1);
+    S(:,iter)        = x0;
+    dV_final(:,iter) = dV(:,1);
 
     % Integration the coasting solution
     tspan = [nu_0 nu_0 + Ts];
@@ -101,21 +128,17 @@ while ( N > 0 )
     x0 = s(end,:).';            % New relative initial conditions
 
     % Update of the MPC loop 
-%     N = N - 1;                  % Reduce the number of optimization steps
+    N = N - 1;                  % Reduce the number of optimization steps
 
-    disp(N)
+    fprintf("Iteration: %d. Converged? %d\n", iter, ~isempty( sol ))
+    iter = iter + 1;
 end
 
 %% Outcome
 % Cost function
-dV_norm = myThruster.p.ComputeVectorNorm( dV_final(1:3,:) );
-
-% Impulsive times 
+dV_norm = myThruster.p.ComputeVectorNorm( dV_final(1:3,:) ); 
 ti = dV_norm ~= 0;
-
-% Results
-cost = sum( dV_norm(1,ti), 2 ) * Vc;
-% error = sqrt( dot(myProblemSolved.e, myProblemSolved.e, 1) );
+cost = sum( dV_norm, 2 ) * Vc;
 Nopt = sum(ti,2);
 
 %% Save results 
@@ -125,7 +148,11 @@ Nopt = sum(ti,2);
 N = size(S,2);
 dim = [Lc Lc Lc Vc Vc Vc] / 1E3;
 S = S.' .* repmat( [dim dim], N, 1 );
+St = St .* repmat( [dim dim], size(St,1), 1 );
 nu = linspace(nu_0 - N * Ts, nu_f, N);
+
+% Absolute trajectories 
+Sc = S(:,1:6) + S(:,7:12);
 
 %% Results 
 figure
@@ -137,6 +164,16 @@ xlabel('$t$')
 % xticklabels(strrep(xticklabels, '-', '$-$'));
 % yticklabels(strrep(yticklabels, '-', '$-$'));
 xlim([nu(1) nu(end)])
+
+figure
+hold on
+plot(OptTime, 'ro-'); 
+grid on;
+ylabel('Opt. time [s]')
+xlabel('$N$')
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
+xlim([1 Ninit])
 
 siz = repmat(100, 1, 1);
 figure 
@@ -162,12 +199,13 @@ siz2 = repmat(100, sum(ti), 1);
 figure 
 view(3)
 hold on
-scatter3( S(1,1) + S(1,7), S(1,2) + S(1,8), S(1,3) + S(1,9), siz, 'b', 'Marker', 'square' );
-scatter3( S(end,1) + S(end,7), S(end,2) + S(end,8), S(end,3) + S(end,9), siz, 'b', 'Marker', 'o' );
-scatter3( S(ti,1) + S(ti,1), S(ti,2) + S(ti,8), S(ti,3) + S(ti,9), siz2, 'Marker', 'x' );
-plot3( S(:,1) + S(:,7), S(:,2) + S(:,8), S(:,3) + S(:,9) ); 
-plot3( S(:,1), S(:,2), S(:,3) );
-legend('$\mathbf{r}_c(t_0)$', '$\mathbf{r}_c(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{r}_c(t)$', '$\mathbf{r}_t(t)$', 'AutoUpdate', 'off');
+scatter3( Sc(1,1), Sc(1,2), Sc(1,3), siz, 'b', 'Marker', 'square' );
+scatter3( Sc(end,1), Sc(end,2), Sc(end,3), siz, 'b', 'Marker', 'o' );
+scatter3( Sc(ti,1), Sc(ti,2), Sc(ti,3), siz2, 'Marker', 'x' );
+plot3( S(:,1), S(:,2), S(:,3) ); 
+plot3( St(:,1), St(:,2), St(:,3) );
+plot3( Sc(:,1), Sc(:,2), Sc(:,3) );
+legend('$\mathbf{r}_c(t_0)$', '$\mathbf{r}_c(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{r}_t(t)$', '$\mathbf{r}_c(t)$', '$\mathbf{r}_c^u(t)$', 'AutoUpdate', 'off');
 hold off
 grid on;
 xlabel('$X$ [km]')
