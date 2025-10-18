@@ -30,29 +30,29 @@ omega0 = norm( x0(5:7) );              % Initial angular velocity
 r0 = x0(end);                          % Initial angular velocity along the last axis
     
 % Number of possible impulses 
-N = 100;
+N = 10;
 
 % Compute the STM across a given time span 
 nu_f = 10; 
 nu = linspace(nu_0, nu_f, N);
 
-STM = zeros(3, 3 * N);
+STM = zeros(7, 7 * N);
 
 for i = 1:N 
-    idx = 1 + 3 * (i-1) : 3 * i;
+    idx = 1 + 7 * (i-1) : 7 * i;
     delta_t = nu(i) - nu(1);
     aux = Papers_EuroGNC_2026.ReachableSetsAttitude.SlewSTM(b, omega0, r0, delta_t);
-    STM(:,idx) = aux(5:7,5:7);
+    STM(:,idx) = aux;
 end
 
 %% Define the rendezvous problem and the STM %%
 % Control input matrix
-B = [eye(3)];
+B = [zeros(4,3); inv(I)];
 B = repmat( B, 1, length(nu) );
 
 %% Final mission definition 
 K = Inf;                                                       % Maximum number of impulses
-myMission = Missions.FuelMission(nu, STM, B, x0(5:7).', xf(5:7).', K);   % Mission
+myMission = Missions.FuelMission(nu, STM, B, x0.', xf.', K);   % Mission
 
 %% Thruster definition 
 dVmin = 0;                                                     % Minimum control authority
@@ -73,11 +73,11 @@ eps = [1e-6; 1e-5];                % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, 1/rho);
+    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^2);
     time(1,i) = myDualProblemSolved.SolveTime;
 
-    lambda = reshape(sol(1:3), 3, []);
-    p = reshape(sol(4:end), 3, []);
+    lambda = reshape(sol(1:7), 7, []);
+    p = reshape(sol(8:end), 3, []);
     dV(1:3,:) = myDualProblemSolved.u;
 end
 
@@ -119,11 +119,11 @@ for i = 1:length(nu)
     % Add maneuver
     cntrl_indx = 5:7;
     plan_idx = 1:3;
-    s(i,cntrl_indx) = s(i,cntrl_indx) + dV(plan_idx,i).';
+    s(i,cntrl_indx) = s(i,cntrl_indx) + dV(plan_idx,i).' * inv(I).';
 end
 
 %% Save results 
-save +Papers_EuroGNC_2026\MinTimeL2
+% save +Papers_EuroGNC_2026\MinTimeL2
 
 %% Results 
 % Norm of the primer vector

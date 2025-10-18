@@ -45,7 +45,7 @@ classdef SolverADMM
 
     methods
         % Constructor 
-        function [obj] = SolverADMM(myObjective, myX_update, myZ_update, myRho, myA, myB, myC)
+        function [obj] = SolverADMM(myObjective, myX_update, myZ_update, myRho, myA, myB, myC, init_guess)
             obj.rho = myRho;
             obj.A = myA;
             obj.B = myB;
@@ -57,6 +57,13 @@ classdef SolverADMM
 
             % Initialization
             obj = obj.initADMM();
+
+            if ( exist('init_guess', 'var') )
+                if ( ~isempty(init_guess) )
+                    obj.x = repmat( init_guess.x, 1, size(obj.x,2) );
+                    obj.z = repmat( init_guess.z, 1, size(obj.z,2) );
+                end
+            end
         end
 
         % Initialization 

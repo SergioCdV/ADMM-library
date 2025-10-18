@@ -31,7 +31,7 @@ function [z] = z_update(indices, q, Phi, b, rho, x, z, u)
     start_ind = 1;
     for i = 1:length(indices)
         sel = start_ind:indices(i);
-        p(sel) = handl_(p(sel));
+        p(sel) = handl_( p(sel) );
         start_ind = indices(i) + 1;
     end
 
