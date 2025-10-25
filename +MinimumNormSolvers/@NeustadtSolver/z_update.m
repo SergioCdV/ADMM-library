@@ -22,7 +22,7 @@ function [z] = z_update(indices, q, Phi, b, rho, x, z, u)
             handl_ = @(p)src.L2BallProx.projection(1, p);
 
         case src.VectorNorm.Linfty
-            handl_ = src.LinfBallProx.projection(1, p);
+            handl_ = @(p)src.LinfBallProx.projection(1, p);
     end
 
     % Primer vector update

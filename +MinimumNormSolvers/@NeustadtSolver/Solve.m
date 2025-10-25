@@ -36,22 +36,25 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     m = obj.Mission.m;                      % State vector dimension
     n = obj.Mission.n;                      % Control input dimension
 
-    Phi = zeros(size(B,2), size(STM,1));
-    Phi0 = STM(:,1:m);
+    Phi = zeros(size(B,2), size(STM,1));    % Pre-allocation of the STM
+    Phi0 = STM(:,1:m);                      % Initial STM
 
+    % Compute the STM
     for i = 1:length(t)
         idx = 1+n*(i-1):n*i;
         Phi(idx,:) = ( STM(:,1+m*(i-1):m*i) \ B(:,idx) ).';
     end
 
     % Compute the initial missvector
-    M = STM(:,1+m*(N-1):m*N);
+    idx = 1 + m * ( N - 1 ) : m * N;
+    M = STM(:,idx);
     b = (M \ xf) - (Phi0 \ x0);
 
     % Constant matrices
-    M        = Phi;         % Initial STM
-    Ones     = ones(1,n);   % Vectors of 1
-    Identity = eye(n);      % Identity matrix of n x n
+    M    = Phi;             % Initial STM
+    Ones = ones(1,n);       % Vectors of 1
+    Id   = eye(n);          % Identity matrix of n x n
+    Os   = zeros(m);        % Zero matrix of m x m
 
     % Optimization of the Lagrange multiplier
     maxIter = 10;           % Maximum number of iterations
@@ -62,20 +65,23 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     vinit = [-b; -zeros(n * N,1)];
 
     while (iter < maxIter && GoOn && N > 1)
-        % Initial cost function 
-        v = vinit(1 : n * (2 + N));
+        % Cost function at each iteration grid
+        v = vinit(1:m + n * N);
 
         % Pre-factoring of constants
-        p = repmat(n, 1, N);
-        cum_part = cumsum(p);
-        pPhi = [Phi kron(eye(N),-Identity)];
-        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
+        p = repmat(n, 1, N);                                    % Control indices across time
+        cum_part = cumsum(p);                                   % Control indices across time
+        
+        % Primer vector linear system
+        KronEye = kron(eye(N), -Id);                            
+        pPhi = [Phi KronEye];                                                   
+        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os];
         Theta = pinv(Theta);
     
         % Create the functions to be solved 
-        Obj = @(x,z)(obj.objective(v, z));
-        X_update = @(x,z,u)(obj.x_update(m, Theta, v, rho, x, z, u));
-        Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Actuator.q, Phi, -b, rho, x, z, u));
+        Obj = @(x,z)( obj.objective(v, z) );
+        X_update = @(x,z,u)( obj.x_update( m, Theta, v, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update( cum_part, obj.Actuator.q, Phi, -b, rho, x, z, u) );
     
         % ADMM consensus constraint definition 
         A = eye(m + n * N);
@@ -100,11 +106,12 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         % Output
         lambda = reshape(x(1:m,end), 1, []).';          % Lagrange multiplier
         p = Phi * lambda;                               % Primer vector
-        p = reshape(p, n, N);
+        p = reshape(p, n, N);                           % Primer vector
         p_norm = obj.Actuator.q.ComputeVectorNorm( p ); % Switching surface
+        
+        % Check for convergence
         max_p = sort(p_norm);
 
-        % Check for convergence
         if ( max_p(end) <= 1 + epsilon(1) )
             % Convergence
             GoOn = false;
@@ -116,6 +123,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             index = kron(index, Ones);                  % Actuation epochs
             Phi = Phi(logical(index),:);                % STM corresponding to the new actuation grid
 
+            % Update the iteration counter
             iter = iter + 1;
         end
     end
@@ -126,7 +134,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     % Computation of the control law
     if ( Output.Result )
         % Both the z and x solutions are equivalent
-
         N       = size(p,2);
         imp_opp = abs(p_norm - 1) <= epsilon(1);
 
@@ -160,9 +167,11 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     %         index = logical(index);
     %         t_pruned = t_pruned(index);
     %         index = kron(index, ones(1,n));
+
         elseif ( ~isempty(Phi) )
-            t_pruned = t_pruned(logical(imp_opp));
-            index    = kron(imp_opp, ones(1,n));
+            % Check actuation epochs
+            t_pruned = t_pruned( logical(imp_opp) );
+            index    = kron( imp_opp, Ones );
             index    = logical( index );
         end
     
@@ -171,11 +180,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             % Compute the maneuver sequence via solving the corresponding linear system
             dv = Phi(index,:).' \ b; 
             dv = reshape( dv, n, [] );
-    
-            dV = zeros(n, length(t));               % Complete action sequence
+            
+            % Complete action sequence
+            dV = zeros(n, length(t));               
             for i = 1:length(t_pruned)
                 dV(:, t_pruned(i) == t) = dv(:,i);
             end
+            
         else
             dV = zeros(n, N);
         end
@@ -187,6 +198,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         obj.e(:,1) = e;                             % Final missvector   
         obj.u = dV;                                 % Final impulsive sequence
         obj.t = t;                                  % Execution times
+        
     else
         % TODO: see what is needed here
         % Check the q-norm of the primer vector on the z-update
