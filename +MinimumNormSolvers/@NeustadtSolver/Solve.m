@@ -54,7 +54,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     M    = Phi;             % Initial STM
     Ones = ones(1,n);       % Vectors of 1
     Id   = eye(n);          % Identity matrix of n x n
-    Os   = zeros(m);        % Zero matrix of m x m
+    Os   = zeros(n * N);    % Zero matrix of n * N x n * N
 
     % Optimization of the Lagrange multiplier
     maxIter = 10;           % Maximum number of iterations
@@ -75,7 +75,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         % Primer vector linear system
         KronEye = kron(eye(N), -Id);                            
         pPhi = [Phi KronEye];                                                   
-        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os];
+        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(1:n*N, 1:n*N)];
         Theta = pinv(Theta);
     
         % Create the functions to be solved 
@@ -89,7 +89,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         c = zeros(m + n * N,1);
     
         % Problem
-        if ( iter == 1 )
+        if ( iter == 1 && exist( 'init_guess', 'var' ) )
             Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
         else
             Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
