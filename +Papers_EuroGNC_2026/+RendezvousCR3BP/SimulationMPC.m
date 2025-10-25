@@ -19,15 +19,18 @@ set_graphics();
 Lc = 384399E3;          % Characteristic length [m]
 Tc = 2.361E6;           % Characteristic time [s]
 mu = 0.0121505856;      % Gravitational constan of the system
-c2 = 3.190425213622208; % Richardson coefficient
-c2 = 4.284390615378499;
-
+c2 = 3.190425213622208; % Richardson coefficient (L1)
+c2 = 4.284390615378499; % Richardson coefficient (L2)
+    
 % Dimensionalization (canonical units)
 Vc = Lc / Tc * 2*pi;    % Characteristic velocity 
 
 % Mission time
-nu_0 = 0;           % Initial clock
-nu_f = 2.75;           % Final clock
+TargetPeriod = 2.761104629643622; 
+ChaserPeriod = 2.754937512093445; 
+
+nu_0 = 0;               % Initial clock
+nu_f = ChaserPeriod;    % Final clock
 
 % Initial target conditions 
 x0 = [0.824024728136525; 0; -0.054501847320725; 0; 0.164671964079122; 0];          
@@ -42,11 +45,14 @@ xc = [xc; zeros(6,1)];
 % Target orbital propagation 
 options = odeset('RelTol', 2.25E-14, 'AbsTol', 1E-22);      % Numerical integration
 tspan = [nu_0 nu_f];
-[~, St] = ode113(@(t,s)cr3bp_equations(mu, t, s), tspan, xc, options);
+[~, St] = ode113(@(t,s)cr3bp_equations(mu, t, s, zeros(3,1)), tspan, xc, options);
 
 % Number of possible impulses 
 N  = 100;                       % Number of steps
 Ts = (nu_f - nu_0) / N;         % Sampling time
+
+% Model to be used
+model = 2;                      % Use RLLM model (1) or account for the target's trajectory (any other value)
 
 %% Mission definition
 % Maximum number of impulses
@@ -81,7 +87,24 @@ while ( iter <= Ninit )
     if ( N > 1 )
         % Update of the mission
         nu = linspace(nu_0, nu_f, N);
-        Phi = wrapper_STM(c2, nu_0, nu_f, N);
+        
+        % STM
+        if ( model == 1 )
+            % Integrate the RLLM variational model
+            Phi = wrapper_STM(c2, nu, N);
+
+        else
+            % Integrate the RLM variational model
+            Phi = reshape(eye(6), [], 1);
+            [~, s] = ode113( @(t,s)cr3bp_var( mu, t, s, zeros(3,1)), nu, [x0(1:6); Phi], options );
+
+            if ( N == 2 )
+                Phi = [eye(6) reshape( s(end,7:end), 6, [] )];
+            else
+                Phi = reshape( s(:,7:end).', 6, [] );
+            end
+        end
+
         Binp = repmat( B, 1, N );
         myMission = Missions.FuelMission(nu, Phi, Binp, x0(7:end,1), xc(7:end,1), K);
            
@@ -123,7 +146,7 @@ while ( iter <= Ninit )
 
     % Integration the coasting solution
     tspan = [nu_0 nu_0 + Ts];
-    [~, s] = ode113( @(t,s)cr3bp_equations(mu, t, s), tspan, x0, options );
+    [~, s] = ode113( @(t,s)cr3bp_equations(mu, t, s, zeros(3,1)), tspan, x0, options );
     
     % Update the IVP
     nu_0 = nu_0 + Ts;           % Update the initial clock
@@ -144,7 +167,7 @@ cost = sum( dV_norm, 2 ) * Vc;
 Nopt = sum(ti,2);
 
 %% Save results 
-save +Papers_EuroGNC_2026\+RendezvousCR3BP\MPC_L2_N1000
+save +Papers_EuroGNC_2026\+RendezvousCR3BP\MPC_L2_N100
 
 %% Dimensionalizations 
 N = size(S,2);
@@ -262,16 +285,56 @@ function [ds] = cr3bp_equations(mu, t, s, u)
     F = F + mup(2) * ( r(4:6,:) ./ R(2,:).^3 - (r_r + r(4:6,:)) ./ sqrt( dot(r_r + r(4:6,:), r_r + r(4:6,:), 1) ).^3 );
  
     % Control force 
-    ds(10:12,:) = ds(10:12,:) + F;
+    ds(10:12,:) = ds(10:12,:) + F + u;
+end
+
+% Rereference target dynamics + variational equations
+function [ds] = cr3bp_var(mu, t, s, u)
+    % Define the initial phase space vector
+    r_t = s(1:3,:);                                    % Synodic position vector
+    x = s(1,:);                                        % Synodic x coordinate
+    y = s(2,:);                                        % Synodic y coordinate 
+    V = s(4:6,:);                                      % Synodic velocity vector
+    
+    % Relevant system parameters
+    mup(1) = 1 - mu;                                   % First primary normalized position
+    mup(2) = mu;                                       % Second primary normalized position
+    Rp(:,1) = [-mu; 0; 0];                             % Position vector of the first primary
+    Rp(:,2) = [1-mu; 0; 0];                            % Position vector of the second primary
+    
+    r(1:3,:) = r_t(1:3,:) - Rp(:,1);                   % Synodic relative position of the target to the first primary
+    r(4:6,:) = r_t(1:3,:) - Rp(:,2);                   % Synodic relative position of the target to the second primary
+
+    R(1,:) = sqrt( dot(r(1:3,:), r(1:3,:), 1) );       % Distance to the first primary
+    R(2,:) = sqrt( dot(r(4:6,:), r(4:6,:), 1) );       % Distance to the secondary primary
+    
+    % Compute the time flow of the system
+    gamma = [x; y; zeros(1,size(x,2))];                % Inertial acceleration terms
+    gamma = gamma + [0 2 0; -2 0 0; 0 0 0] * V;
+    ds = [V; gamma]; 
+
+    % Gravitational forces
+    Accg = - mup(1) ./ R(1,:).^3 .* r(1:3,:) - mup(2) ./ R(2,:).^3 .* r(4:6,:);
+    ds(4:6,:) = ds(4:6,:) + Accg + u;
+    
+    % Define the Jacobian of the co-orbital model 
+    Sigma = [0 2 0; -2 0 0; 0 0 0];
+    eps = [r(1:3,:) ./ R(1,:) r(4:6,:) ./ R(2,:)];
+    kappa = [mup(1) ./ R(1,:).^3 mup(2) ./ R(2,:).^3];
+    H = -sum(kappa) * eye(3) + 3 * kappa(1) * eps(:,1) * eps(:,1).' + 3 * kappa(2) * eps(:,2) * eps(:,2).';
+    J = [zeros(3) eye(3); H Sigma];
+
+    % Differential system 
+    Phi = reshape(s(7:end), 6, 6);
+    dJ = J * Phi; 
+    ds = [ds; reshape(dJ, [], 1)];
 end
 
 % Compute the STM of the relative CRB3P
-function [Phi] = wrapper_STM(c2, nu_0, nu_f, N)
+function [Phi] = wrapper_STM(c2, nu, N)
     % Pre-allocation
     Phi = zeros(6, 6 * N);
     STM = zeros(6, 6 * N);
-
-    nu = linspace(nu_0, nu_f, N);
     
     for i = 1:length(nu)
         idx = 1 + 6 * (i-1) : 6 * i;
