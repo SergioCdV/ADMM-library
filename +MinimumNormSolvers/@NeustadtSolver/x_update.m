@@ -10,7 +10,8 @@
 
 function [x] = x_update(m, Phi, c, rho, x, z, u)
    % Linear quadratic problem
-   b = -[c - rho * (z - u); -zeros(length(c)-m,1)];
-   x = Phi * b;
-   x = x(1:length(c));
+   nx = size(z,1);
+   c(1:nx) = c(1:nx) - rho * (z - u);
+   x = -Phi * c;
+   x = x(1:nx);
 end

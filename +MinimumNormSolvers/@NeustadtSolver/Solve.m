@@ -50,11 +50,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     M = STM(:,idx);
     b = (M \ xf) - (Phi0 \ x0);
 
-    % Constant matrices
+    % Constant matrices  << this is for speed in a computation unit with sufficient RAM
     M    = Phi;             % Initial STM
     Ones = ones(1,n);       % Vectors of 1
     Id   = eye(n);          % Identity matrix of n x n
     Os   = zeros(n * N);    % Zero matrix of n * N x n * N
+    p = repmat(n, 1, N);    % Control indices across time
+    cum_part = cumsum(p);   % Control indices across time
 
     % Optimization of the Lagrange multiplier
     maxIter = 10;           % Maximum number of iterations
@@ -65,28 +67,26 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     vinit = [-b; -zeros(n * N,1)];
 
     while (iter < maxIter && GoOn && N > 1)
-        % Cost function at each iteration grid
-        v = vinit(1:m + n * N);
-
-        % Pre-factoring of constants
-        p = repmat(n, 1, N);                                    % Control indices across time
-        cum_part = cumsum(p);                                   % Control indices across time
-        
         % Primer vector linear system
         KronEye = kron(eye(N), -Id);                            
         pPhi = [Phi KronEye];                                                   
         Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(1:n*N, 1:n*N)];
         Theta = pinv(Theta);
+
+        % Linear cost function at each iteration grid
+        nx = m + n * N;
+        v = vinit(1:nx);
+        linear_cost = [v; -zeros(size(Theta,1)-nx,1)];
     
         % Create the functions to be solved 
         Obj = @(x,z)( obj.objective(v, z) );
-        X_update = @(x,z,u)( obj.x_update( m, Theta, v, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update( cum_part, obj.Actuator.q, Phi, -b, rho, x, z, u) );
+        X_update = @(x,z,u)( obj.x_update( Theta, linear_cost, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update( cum_part(1:N), obj.Actuator.q, Phi, -b, rho, x, z, u) );
     
         % ADMM consensus constraint definition 
-        A = eye(m + n * N);
+        A = eye(nx);
         B = -A;        
-        c = zeros(m + n * N,1);
+        c = zeros(nx,1);
     
         % Problem
         if ( iter == 1 && exist( 'init_guess', 'var' ) )
