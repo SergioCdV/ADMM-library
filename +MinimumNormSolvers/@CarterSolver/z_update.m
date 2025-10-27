@@ -8,12 +8,9 @@
 %% Z update %% 
 % ADMM problem function to update the Z sequence via proximal minimization
 
-function [z] = z_update(indices, p, q, umin, umax, K, Phi, b, rho, x, z, u)
+function [z] = z_update(n, p, q, ~, umax, K, Phi, b, rho, x, ~, u)
     % Pre-allocation 
     y = x + u;
-
-    % Impulses update
-    n = length(x) / 2;
 
     % Fuel consumption minimization
     switch (p)
@@ -28,7 +25,7 @@ function [z] = z_update(indices, p, q, umin, umax, K, Phi, b, rho, x, z, u)
     end
 
     % Maximum control ball projection
-    if (umax ~= Inf)
+    if ( umax ~= Inf )
         switch q
             case src.VectorNorm.L1
                 proj_handle_ = @(z)src.L1BallProx.projection( umax, z );
@@ -43,38 +40,33 @@ function [z] = z_update(indices, p, q, umin, umax, K, Phi, b, rho, x, z, u)
         proj_handle_ = @(z)( z );
     end
 
-    start_ind = 1;
-    for i = 1:length(indices)
-        sel = start_ind:indices(i);
+    % Fuel consumption minimization
+    idx = 1:n;
+    dV = reshape( y(idx), n, []);
+    z(:,idx) = hand_( dV );
 
-        % Fuel consumption minimization
-        z(sel) = hand_( 1/rho, y(sel) );
-
-        % Maximum control ball projection 
-        z(sel) = proj_handle_( z(sel) );
-
-        % Maximum control ball projection   
-        norm = q.ComputeVectorNorm( z(sel) ); 
-        Phi(:,sel) = -norm * Phi(:,sel);
-                   
-        start_ind = indices(i) + 1;
-    end
+    % Control authority (this should be parallel projections really)
+    z(:,idx) = proj_handle_( z(:,idx) );
 
     % Cardinality constraint
-    if (K ~= Inf)
-        dV = reshape(z, indices(1), []);
-        cost = p.ComputeVectorNorm( dV );
-    
-        [~, pos] = sort( cost, 'descend');
-        
-        index = pos(K+1:end);
-        for i = 1:length(index)
-            z(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
-        end
+    cost = p.ComputeVectorNorm( z(:,idx) );
+
+    if ( K ~= Inf )
+        [~, pos] = sort( cost, 'descend' );
+        sel = pos(K+1:end);
+        z(:,sel) = zeros(n, length(sel));
+        cost(sel) = zeros(1, length(sel));
     end
 
     % Primer vector updates
-    pinvA = pinv(Phi);
+    for i = 1:size(z,2)
+        idx = 1 + n * (i - 1) : n * i;
+        Phi(:,idx) = -cost * Phi(:,idx);
+    end
+
+    z = reshape(z, [], 1);
+
+    pinvA = pinv( Phi );
     Ab = pinvA * b;
     idx = n+1:2*n;
     z(idx) = (eye(n) - pinvA * Phi) * y(idx) + Ab;

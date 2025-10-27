@@ -1,6 +1,6 @@
 %% Optimal control by ADMM %% 
 % Sergio Cuevas del Valle
-% Date: 28/08/23
+% Date: 26/10/25
 % File: z_update.m 
 % Issue: 0 
 % Validated: 
@@ -8,7 +8,7 @@
 %% Z update %% 
 % ADMM problem function to update the Z sequence via proximal minimization
 
-function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
+function [z] = z_update(n, p, q, ~, umax, K, rho, x, ~, u)
     % Pre-allocation 
     y = x + u;
 
@@ -25,7 +25,7 @@ function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
     end
 
     % Maximum control ball projection
-    if (umax ~= Inf)
+    if ( umax ~= Inf )
         switch q
             case src.VectorNorm.L1
                 proj_handle_ = @(z)src.L1BallProx.projection( umax, z );
@@ -41,29 +41,21 @@ function [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u)
     end
 
     % Impulses update
-    start_ind = 1;
-    for i = 1:length(indices)
-        sel = start_ind:indices(i);
-        
-        % Fuel minimization 
-        z(sel) = hand_( y(sel) ); 
+    y = reshape(y, n, []);
 
-        % Control authority (this should be parallel projections really)
-        z(sel) = proj_handle_( z(sel) );
-                   
-        start_ind = indices(i) + 1;
-    end
+    % Fuel minimization 
+    z = hand_( y ); 
+
+    % Control authority (this should be parallel projections really)
+    z = proj_handle_( z );
 
     % Cardinality constraint
-    if (K ~= Inf)
-        dV = reshape(z, indices(1), []);
-        cost = p.ComputeVectorNorm( dV );
-    
+    if ( K ~= Inf )
+        cost = p.ComputeVectorNorm( z );
         [~, pos] = sort( cost, 'descend' );
-        
-        index = pos(K+1:end);
-        for i = 1:length(index)
-            z(1 + indices(1) * (index(i)-1): indices(1) * index(i)) = zeros(indices(1), 1);
-        end
+        idx = pos(K+1:end);
+        z(:,idx) = zeros(n, length(idx));
     end
+
+    z = reshape(z, [], 1);
 end

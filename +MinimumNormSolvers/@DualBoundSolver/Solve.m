@@ -146,75 +146,25 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         end
     end
     
-    % Final output 
-    u = [lambda; M * lambda];       % Adjoint vector at final epoch and primer vector
-
     % Computation of the control law
     if ( Output.Result )
-        % Both the z and x solutions are equivalent
-        N       = size(p,2);
-        sigma   = sigma(tw_idx);
-        imp_opp = abs(p_norm - (1 + sigma.')) <= epsilon(1);
+        % Final output 
+        u = [lambda; M * lambda];       % Adjoint vector at final epoch and primer vector
 
-        if ( sum(imp_opp) > 1E3 )
-     % TODO: analysis based on the derivative of the primer vector
-    %         dp = p_norm - 1;
-    %         d_dp  = gradient(dp); 
-    %         dd_dp = gradient(d_dp);
-    %         dp = abs(dp);
-    %         [~, pos] = sort(dp);
-    %         index = zeros(1,length(p_norm));
-    % 
-    %         k = 0;
-    %         for i = 1:length(pos)
-    %             if (t(pos(i)) == t(1) && sign(d_dp(1)) < 0)
-    %                 index(pos(i)) = 1;
-    %                 k = k+1;
-    %             elseif (t(pos(i)) == t(end) && sign(d_dp(end)) > 0)
-    %                 index(pos(i)) = 1;
-    %                 k = k+1;
-    %             elseif (sign(dd_dp(pos(i))) < 0)
-    %                 index(pos(i)) = 1;
-    %                 k = k+1;
-    %             end
-    % 
-    %             if (k == m)
-    %                 break;
-    %             end
-    %         end
-    %         
-    %         index = logical(index);
-    %         t_pruned = t_pruned(index);
-    %         index = kron(index, ones(1,n));
+        % Input reconstruction 
+        [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t_pruned, b, Phi, p_norm, epsilon);
 
-        elseif ( ~isempty(Phi) )
-            % Check actuation epochs
-            t_pruned = t_pruned( logical(imp_opp) );
-            index    = kron( imp_opp, Ones );
-            index    = logical( index );
-        end
-    
-        % Action sequence
-        if ( ~isempty(Phi) )
-            % Compute the maneuver sequence via solving the corresponding linear system
-            dv = Phi(index,:).' \ b; 
-            dv = reshape( dv, n, [] );
-            
-            % Complete action sequence
-            dV = zeros(n, length(t));               
-            for i = 1:length(t_pruned)
-                dV(:, t_pruned(i) == t) = dv(:,i);
-            end
-            
-        else
-            dV = zeros(n, N);
+        % Complete action sequence
+        dV = zeros( n, length(t) );               
+        for i = 1:length(t_pruned)
+            dV(:, t_pruned(i) == t) = dv(:,i);
         end
     
         % Output
         e = b - M.' * reshape(dV, [], 1);           % Regulation error
+        obj.e(:,1) = e;                             % Final missvector   
         obj.Cost = dot(b, lambda);                  % Final minimum-norm cost
         obj.Report = Output;                        % Optimization report
-        obj.e(:,1) = e;                             % Final missvector   
         obj.u = dV;                                 % Final impulsive sequence
         obj.t = t;                                  % Execution times
         

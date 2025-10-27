@@ -32,7 +32,7 @@ classdef PrimalSolver < MinimumNormSolvers.SolverMinimumNorm
 
     % ADMM functions
     methods (Static)
-        [p] = objective(p, cum_part, x);
+        [p] = objective(p, x);
         [x] = x_update(pInvA, Atb, x, z, u);
         [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u);
     end

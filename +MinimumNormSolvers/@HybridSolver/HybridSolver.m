@@ -34,7 +34,7 @@ classdef HybridSolver < MinimumNormSolvers.SolverMinimumNorm
     methods (Static)
         [p] = objective(cum_part, x, z);
         [x] = x_update(Phi, b, rho, x, z, u);
-        [z] = z_update(indices, umin, umax, K, rho, x, z, u);
+        [z] = z_update(n, umin, umax, K, rho, x, z, u);
     end
 
 end

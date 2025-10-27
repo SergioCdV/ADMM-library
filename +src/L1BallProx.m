@@ -23,16 +23,25 @@ classdef L1BallProx < src.ProxOperator
     methods (Static)
         % Projection onto an L1-ball 
         function [x] = projection(a, x)
-            if ( sum( abs(x) ) > a )
-                u = sort(x, 'descend');
-                K = 1:length(x); 
+            norm_ = vecnorm( x, 1, 1 );
+            idx = norm_ > a;
 
-                index = cumsum(u) ./ K < u;
-                index(1) = 1;
+            if ( any(idx) )
+                N = sum(idx);
+                m = size(x,1);
+                cols = 1:m;
+                K = repmat(cols.', 1, N);
 
-                u = u( logical(index) );
-                rho = sum(u - a) / length(u);
-                x = max(x - rho, 0);
+                u = sort( x(:,idx), 'descend' );
+                U = cumsum(u, 1) - a;                    
+                res = U ./ K;
+
+                index = res < u;
+                [~, idx_from_bottom] = max( flipud(index), [], 1 );
+                last_k = m - idx_from_bottom + 1;
+                rho = res(last_k);             
+
+                x(:,idx) = max( x(:,idx) - rho, 0 );
             end
         end
     end

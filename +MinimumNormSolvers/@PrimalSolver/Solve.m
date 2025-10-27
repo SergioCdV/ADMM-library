@@ -32,53 +32,56 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = (M * STM(:,1+m*(i-1):m*i)^(-1)) * B(:,1+n*(i-1):n*i);
+        stm_idx = 1 + m * (i - 1): m * i;
+        state_idx = 1 + n * (i - 1) : n * i;
+
+        Phi(:,state_idx) = ( M / STM(:,stm_idx) ) * B(:,state_idx);
     end
 
     % Compute the initial missvector
     b = xf - M * x0;
 
     % Pre-factoring of constants
-    Atb = pinv(Phi)*b;
-    pInvA = (eye(size(Phi,2))-pinv(Phi)*Phi);
-    p = repmat(n, 1, N);
-    cum_part = cumsum(p);
+    Atb = pinv(Phi) * b;
+    pInvA = eye(size(Phi,2)) - pinv(Phi) * Phi;
 
     % Create the functions to be solved 
-    Obj = @(x,z)(obj.objective(obj.Actuator.p, cum_part, x));
-    X_update = @(x,z,u)(obj.x_update(pInvA, Atb, x, z, u));
-    Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Actuator.p, obj.Actuator.q, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u));
+    Obj = @(x,z)( obj.objective(obj.Actuator.p, x) );
+    X_update = @(x,z,u)( obj.x_update(pInvA, Atb, x, z, u) );
+    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.p, obj.Actuator.q, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u) );
 
     % ADMM consensus constraint definition 
-    A = eye(n * N);
-    B = -eye(n * N);        
-    c = zeros(n * N,1);
+    nx = n * N;
+    Id = eye(nx);
+    A = Id;
+    B = -A;        
+    c = zeros(nx,1);
 
     % Problem
     Problem = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
 
-    if (~exist('alpha', 'var'))
+    if ( ~exist('alpha', 'var') )
         alpha = 1;
     end
+
     Problem.alpha = alpha;
     Problem.QUIET = false;
 
     % Optimization
     tic
-    [x, z, Output] = Problem.solver();
+    [x, ~, Output] = Problem.solver();
     obj.SolveTime = toc;
 
     % Output 
-    dV = reshape(x(:,end), n, []);  % Control sequence
-    u = dV; 
+    u = reshape(x(:,end), n, []);        % Control sequence
     
-    obj.Cost = obj.Actuator.p.ComputeVectorNorm( dV );
-    obj.Cost = sum(obj.Cost);
+    obj.Cost = obj.Actuator.p.ComputeVectorNorm( u );
+    obj.Cost = sum( obj.Cost );
 
     obj.Report = Output;                 % Optimization report
-    obj.e(:,1) = b - Phi * x(:,end);     % Final missvector  
-    obj.e(:,2) = b - Phi * z(:,end);     % Final missvector 
-    obj.u = dV;                          % Final rendezvous impulsive sequence
+    e = b - Phi * x(:,end);              % Final missvector
+    obj.e(:,1) = e;                      % Final missvector 
+    obj.e(:,2) = obj.e(:,1);             % Final missvector 
+    obj.u = u;                           % Final rendezvous impulsive sequence
     obj.t = t;                           % Execution times
-    e = obj.e;
 end

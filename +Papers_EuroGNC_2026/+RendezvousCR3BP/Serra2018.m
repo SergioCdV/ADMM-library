@@ -5,7 +5,7 @@
 % Issue: 0 
 % Validated: 
 
-%% C3BP rendezvous, Serra 2018 %% 
+%% CR3BP rendezvous, Serra 2018 %% 
 % Solve for the time-fixed optimal rendezvous in the CR3BP (EM L2) via ADMM
 % and PVT %
 
@@ -67,7 +67,7 @@ for i = 1:length(nu)
 end
 
 %% Final mission definition 
-K = Inf;                                                % Maximum number of impulses
+K = Inf;                                                       % Maximum number of impulses
 myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
@@ -86,7 +86,7 @@ dV = zeros(3 * 2, N);               % Impulses of the two algorithms
 
 % Optimization
 rho = 1/N;                          % AL parameter 
-eps = [1e-6; 1e-5];                 % Numerical tolerance
+eps = 1E-5;                         % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
@@ -98,7 +98,7 @@ for i = 1:iter
     dV(1:3,:) = myDualProblemSolved.u;
 
     % Primal resolution
-    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
+    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho^2 );
     time(2,i) = myPrimalProblemSolved.SolveTime;
 end
 
@@ -139,7 +139,7 @@ for i = 1:length(nu)
             Phi2 = reshape(STM(:,curr_idx), [6 6]);
     
             state_idx = 1 + 6 * (j-1) : 6 * j;
-            s(i,state_idx) = s(i-1,state_idx) * (Phi2 * Phi1^(-1)).';
+            s(i,state_idx) = s(i-1,state_idx) * (Phi2 / Phi1).';
         end
     
         % Add maneuver
@@ -189,7 +189,6 @@ view(3)
 hold on
 scatter3(s(1,1), s(1,2), s(1,3), siz, 'b', 'Marker', 'square');
 scatter3(s(end,1), s(end,2), s(end,3), siz, 'b', 'Marker', 'o');
-
 
 for j = 1:2
     % Plot each trajectory and the corresponding control law

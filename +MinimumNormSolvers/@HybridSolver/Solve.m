@@ -32,34 +32,35 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        Phi(:,1+n*(i-1):n*i) = (M * STM(:,1+m*(i-1):m*i)^(-1)) * B(:,1+n*(i-1):n*i);
+        cntrl_index = 1 + n * (i - 1) : n * i;
+        state_idx = 1 + m * (i - 1) : m * i;
+        Phi(:,cntrl_index) = ( M / STM(:,state_idx) ) * B(:,cntrl_index);
     end
+
     A = [(1 + rho) * eye(size(Phi,2)) Phi.'; Phi zeros(size(Phi,1))];
     A = pinv(A);
 
     % Compute the initial missvector
     b = xf - M * x0;
 
-    % Pre-factoring of constants
-    p = repmat(n, 1, N);
-    cum_part = cumsum(p);
-
     % Create the functions to be solved 
-    Obj = @(x,z)(obj.objective(cum_part, x, z));
-    X_update = @(x,z,u)(obj.x_update(A, b, rho, x, z, u));
-    Z_update = @(x,z,u)(obj.z_update(cum_part, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u));
+    Obj = @(x,z)( obj.objective(x, z) );
+    X_update = @(x,z,u)( obj.x_update(A, b, rho, x, z, u) );
+    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u) );
 
     % ADMM consensus constraint definition 
-    A = eye(n * N);
-    B = -eye(n * N);        
-    c = zeros(n * N,1);
+    nx = n * N;
+    A = eye(nx);
+    B = -A;        
+    c = zeros(nx,1);
 
     % Problem
     Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);
 
-    if (~exist('alpha', 'var'))
+    if ( ~exist('alpha', 'var') )
         alpha = 1;
     end
+
     Problem.alpha = alpha;
     Problem.QUIET = false;
 
@@ -69,17 +70,18 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     obj.SolveTime = toc;
 
     % Output 
-    dV2 = reshape(x(:,end), n, []);   % Control sequence
-    dV = reshape(z(:,end), n, []);  % Control sequence
-    u = [dV2; dV]; 
+    dV2 = reshape(x(:,end), n, []);      % Control sequence
+    dV  = reshape(z(:,end), n, []);      % Control sequence
+    u   = [dV2; dV]; 
 
     obj.Cost = sum( abs(dV), 1 );
-    obj.Cost = sum(obj.Cost);
+    obj.Cost = sum( obj.Cost );
 
-    obj.Report = Output;                 % Optimization report
     obj.e(:,1) = b - Phi * x(:,end);     % Final missvector  
     obj.e(:,2) = b - Phi * z(:,end);     % Final missvector 
+    e = obj.e;
+
+    obj.Report = Output;                 % Optimization report
     obj.u = dV;                          % Final rendezvous impulsive sequence
     obj.t = t;                           % Execution times
-    e = obj.e;
 end

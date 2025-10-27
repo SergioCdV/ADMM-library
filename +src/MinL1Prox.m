@@ -23,7 +23,9 @@ classdef MinL1Prox < src.ProxOperator
     methods (Static)
         % Projection onto the minimum L1 norm 
         function [y] = projection(kappa, x)
-            y = max(0, x - kappa) - max(0, -x - kappa);
+            n = size(x);
+            Os = zeros(n);
+            y = max(Os, x - kappa) - max(Os, -x - kappa);
         end
     end
 end

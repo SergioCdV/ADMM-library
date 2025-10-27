@@ -26,7 +26,9 @@ classdef MinL2Prox < src.ProxOperator
             norm_x = vecnorm( x );
             idx = norm_x ~= 0;
             y = x; 
-            y(:,idx) = max( 0, 1 - kappa ./ norm_x(idx) ) .* x(:,idx);
+            if any(idx)
+                y(:,idx) = max( 0, 1 - kappa ./ norm_x(idx) ) .* x(:,idx);
+            end
         end
     end
 end

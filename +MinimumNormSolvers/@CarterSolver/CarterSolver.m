@@ -32,9 +32,9 @@ classdef CarterSolver < MinimumNormSolvers.SolverMinimumNorm
 
     % ADMM functions
     methods (Static)
-        [p] = objective(p, cum_part, z);
+        [p] = objective(p, z);
         [x] = x_update(n, q, pInvA, Atb, x, z, u);
-        [z] = z_update(indices, p, q, umin, umax, K, Phi, b, rho, x, z, u);
+        [z] = z_update(n, p, q, umin, umax, K, Phi, b, rho, x, z, u);
     end
 
 end

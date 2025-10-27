@@ -13,12 +13,12 @@ function [norm] = ComputeVectorNorm( obj, myVector )
     % Compute the norm
     switch (obj)
         case src.VectorNorm.L2
-            norm = vecnorm( myVector );
+            norm = vecnorm( myVector, 2, 1 );
             
         case src.VectorNorm.L1
-            norm = vecnorm( myVector, 1 );
+            norm = vecnorm( myVector, 1, 1 );
 
         case src.VectorNorm.Linfty
-            norm = vecnorm( myVector, Inf );
+            norm = vecnorm( myVector, Inf, 1 );
     end
 end

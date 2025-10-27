@@ -16,7 +16,7 @@ function [x] = x_update(n, q, pInvA, Atb, x, z, u)
     x(1:N) = pInvA * y + Atb;         
 
     % Primer vector update (projection onto the unit q-ball)
-    dV = reshape(y, n, N/n);
+    dV = reshape(y, n, []);
     p = dV;
     
     p_norm   = q.ComputeVectorNorm( dV );

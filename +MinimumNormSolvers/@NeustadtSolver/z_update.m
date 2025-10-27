@@ -8,7 +8,7 @@
 %% Z update %% 
 % ADMM problem function to update the Z sequence via proximal minimization
 
-function [z] = z_update(indices, q, Phi, b, ~, x, ~, u)
+function [z] = z_update(n, q, Phi, b, ~, x, ~, u)
     % Constants 
     m = size(Phi,2);
     y = x + u;
@@ -26,19 +26,13 @@ function [z] = z_update(indices, q, Phi, b, ~, x, ~, u)
     end
 
     % Primer vector update
-    p = y(m+1:end);
-
-    start_ind = 1;
-    for i = 1:length(indices)
-        sel = start_ind:indices(i);
-        p(sel) = handl_( p(sel) );
-        start_ind = indices(i) + 1;
-    end
+    p = reshape( y(m+1:end), n, [] );
+    p = handl_(p);
 
     % Lagrange multiplier update (projection on a half space)
     lambda = y(1:m);
     lambda = src.HalfSpaceProx.projection(b, 0, lambda);
 
     % Final vector
-    z = [lambda; p];
+    z = [lambda; reshape(p, [], 1)];
 end

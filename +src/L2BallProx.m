@@ -25,7 +25,9 @@ classdef L2BallProx < src.ProxOperator
         function [x] = projection(a, x)
             norm_ = vecnorm( x );
             idx = norm_ > a;
-            x(:,idx) = a * x(:,idx) ./ norm_(idx);
+            if any(idx)
+                x(:,idx) = a * x(:,idx) ./ norm_(idx);
+            end
         end
     end
 end
