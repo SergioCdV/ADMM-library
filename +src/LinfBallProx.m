@@ -22,8 +22,8 @@ classdef LinfBallProx < src.ProxOperator
 
     methods (Static)
         % Projection onto an Linf-ball 
-        function [x] = projection(a, x)
-            x = min( max(x, -a), a );
+        function [y] = projection(a, x)
+            y = min( max(x, -a), a );
         end
     end
 end

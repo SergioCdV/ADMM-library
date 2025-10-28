@@ -29,7 +29,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     xf = obj.Mission.xf;                    % Final conditions 
 
     t = obj.Mission.t;                      % Mission clock
-    t_pruned = t;                           % Mission clock
     N = length(t);                          % Number of total opportunities
     STM = obj.Mission.Phi;                  % STM of the system
     B = obj.Mission.B;                      % Control input of the system
@@ -63,9 +62,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
     % Initial indices 
     time_mask = logical( Os(1,1:N) );
-    time_mask(1) = true; 
-    time_mask(end) = true; 
-    time_mask( floor(N/2) ) = true;
+    time_mask([1 floor(N/2) end]) = true * ones(1,3); 
 
     % Cost function
     vinit = [-b; -Os(:,1)];
@@ -92,8 +89,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     
         % Create the functions to be solved 
         Obj = @(x,z)( obj.objective(v, z) );
-        X_update = @(x,z,u)( obj.x_update( Theta, linear_cost, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update( n, obj.Actuator.q, Phi, -b, rho, x, z, u) );
+        X_update = @(x,z,u)( obj.x_update(Theta, linear_cost, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.q, Phi, -b, rho, x, z, u) );
     
         % ADMM consensus constraint definition 
         A = eye(nx);
