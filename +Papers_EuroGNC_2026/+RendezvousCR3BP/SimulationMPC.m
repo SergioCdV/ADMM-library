@@ -5,7 +5,7 @@
 % Issue: 0 
 % Validated: 
 
-%% C3BP rendezvous via MPC % 
+%% CR3BP rendezvous via MPC % 
 % Solve for a time-fixed optimal rendezvous in the CR3BP (EM L2) via ADMM, MPC and PVT %
 
 close; 
@@ -71,7 +71,7 @@ myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 % myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
 
 % Optimization
-eps = [1e-6; 1e-5];        % Numerical tolerance
+eps = 1E-5;                % Numerical tolerance
 dV_final = zeros(3,N);     % Maneuver sequence
 S = zeros(12,N);           % Realised trajectory
 OptTime = zeros(1, N);     % Optimization time  
@@ -96,7 +96,7 @@ while ( iter <= Ninit )
         else
             % Integrate the RLM variational model
             Phi = reshape(eye(6), [], 1);
-            [~, s] = ode113( @(t,s)cr3bp_var( mu, t, s, zeros(3,1)), nu, [x0(1:6); Phi], options );
+            [~, s] = ode113( @(t,s)cr3bp_var( mu, t, s, zeros(3,1) ), nu, [x0(1:6); Phi], options );
 
             if ( N == 2 )
                 Phi = [eye(6) reshape( s(end,7:end), 6, [] )];
@@ -113,7 +113,7 @@ while ( iter <= Ninit )
         myDualProblem = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
         
         % Optimization
-        [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2), 1, initial_guess);
+        [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2), 1);
 %     [~, sol, ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
 
         OptTime(iter) = myDualProblemSolved.SolveTime;
@@ -124,7 +124,7 @@ while ( iter <= Ninit )
 
             % New initial guess
             initial_guess.x = sol([1:m m+4:end]);
-            initial_guess.z = sol([1:m m+4:end]);
+            initial_guess.z = initial_guess.x;
         else
             % New maneuver sequence
             dV = dV(:,2:end);
@@ -132,7 +132,7 @@ while ( iter <= Ninit )
             % New initial guess
             if ( ~isempty(initial_guess) )
                 initial_guess.x = initial_guess.x([1:m m+4:end]);
-                initial_guess.z = initial_guess.z([1:m m+4:end]);
+                initial_guess.z = initial_guess.x;
             end
         end
     else
@@ -218,27 +218,27 @@ zlabel('$z$ [km]')
 xticklabels(strrep(xticklabels, '-', '$-$'));
 yticklabels(strrep(yticklabels, '-', '$-$'));
 zticklabels(strrep(zticklabels, '-', '$-$'));
-
+%%
 siz = repmat(100, 1, 1);
-siz2 = repmat(100, sum(ti), 1);
+siz2 = repmat(100, sum(tps), 1);
 figure 
 view(3)
 hold on
 scatter3( Sc(1,1), Sc(1,2), Sc(1,3), siz, 'b', 'Marker', 'square' );
 scatter3( Sc(end,1), Sc(end,2), Sc(end,3), siz, 'b', 'Marker', 'o' );
-scatter3( Sc(ti,1), Sc(ti,2), Sc(ti,3), siz2, 'Marker', 'x' );
+scatter3( x(1,tps) * Lc/1e3, x(2,tps) * Lc/1e3, x(3,tps) * Lc/1e3, siz2, 'Marker', 'x' );
 plot3( S(:,1), S(:,2), S(:,3) ); 
 plot3( St(:,1), St(:,2), St(:,3) );
-plot3( Sc(:,1), Sc(:,2), Sc(:,3) );
+plot3( x(1,:) * Lc/1e3, x(2,:) * Lc/1e3, x(3,:) * Lc/1e3 );
 legend('$\mathbf{r}_c(t_0)$', '$\mathbf{r}_c(t_f)$', '$\Delta \mathbf{V}_i$', '$\mathbf{r}_t(t)$', '$\mathbf{r}_c(t)$', '$\mathbf{r}_c^u(t)$', 'AutoUpdate', 'off');
 hold off
 grid on;
 xlabel('$X$ [km]')
 ylabel('$Y$ [km]')
 zlabel('$Z$ [km]')
-xticklabels(strrep(xticklabels, '-', '$-$'));
-yticklabels(strrep(yticklabels, '-', '$-$'));
-zticklabels(strrep(zticklabels, '-', '$-$'));
+% xticklabels(strrep(xticklabels, '-', '$-$'));
+% yticklabels(strrep(yticklabels, '-', '$-$'));
+% zticklabels(strrep(zticklabels, '-', '$-$'));
 
 %% Auxiliary function
 % Newton equations of the co-orbital CR3BP

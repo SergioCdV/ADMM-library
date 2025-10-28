@@ -98,7 +98,7 @@ for i = 1:iter
     dV(1:3,:) = myDualProblemSolved.u;
 
     % Primal resolution
-    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho^2 );
+    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
     time(2,i) = myPrimalProblemSolved.SolveTime;
 end
 
@@ -154,7 +154,7 @@ dim = [Lc Lc Lc Vc Vc Vc];
 s = s .* repmat([dim dim], N, 1) / 1e3;
 
 %% Save results 
-% save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2
+save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2100
 
 %% Results 
 % Norm of the primer vector
