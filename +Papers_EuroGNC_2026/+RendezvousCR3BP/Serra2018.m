@@ -72,12 +72,12 @@ myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = Inf;                                            % Maximum control authority
+dVmax = 1;                                            % Maximum control authority
 myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myDualProblem   = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
+myDualProblem   = MinimumNormSolvers.DualBoundSolver(myMission, myThruster);
 myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
 
 iter = 1;                           % Number of interations

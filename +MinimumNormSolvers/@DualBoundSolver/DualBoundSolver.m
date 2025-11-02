@@ -26,9 +26,7 @@ classdef DualBoundSolver < MinimumNormSolvers.NeustadtSolver
 
     % ADMM functions
     methods (Static)
-        [p] = objective(c, x);
-        [x] = x_update(Phi, c, rho, x, z, u);
-        [z] = z_update(indices, tw_idx, q, Phi, b, rho, x, z, u);
+        [z] = z_update(n, sigma_pos, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, u);
     end
 
 end

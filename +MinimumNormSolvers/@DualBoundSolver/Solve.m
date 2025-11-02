@@ -24,157 +24,208 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         alpha = 1;
     end
 
-    % Pre-allocation 
-    x0 = obj.Mission.x0;                    % Initial conditions 
-    xf = obj.Mission.xf;                    % Final conditions 
+    if ( ~exist('init_guess', 'var') )
+        init_guess = [];
+    end
 
-    t = obj.Mission.t;                      % Mission clock
-    t_pruned = t;                           % Mission clock
-    N = length(t);                          % Number of total opportunities
-    STM = obj.Mission.Phi;                  % STM of the system
-    B = obj.Mission.B;                      % Control input of the system
-    m = obj.Mission.m;                      % State vector dimension
-    n = obj.Mission.n;                      % Control input dimension
     umax = obj.Actuator.umax;               % Maximum control authority
 
-    Phi = zeros(size(B,2), size(STM,1));    % Pre-allocation of the STM
-    Phi0 = STM(:,1:m);                      % Initial STM
-
-    % Compute the STM
-    for i = 1:length(t)
-        idx = 1+n*(i-1):n*i;
-        Phi(idx,:) = ( STM(:,1+m*(i-1):m*i) \ B(:,idx) ).';
-    end
-
-    % Compute the initial missvector
-    idx = 1 + m * ( N - 1 ) : m * N;
-    M = STM(:,idx);
-    b = (M \ xf) - (Phi0 \ x0);
-
-    % Constant matrices  << this is for speed in a computation unit with sufficient RAM
-    M    = Phi;             % Initial STM
-    Ones = ones(1,n);       % Vectors of 1
-    Id   = eye(n);          % Identity matrix of n x n
-    Os   = zeros(n * N);    % Zero matrix of m x m
-    p = repmat(n, 1, N);    % Control indices across time
-    cum_part = cumsum(p);   % Control indices across time
-
-    % Determine the time window
-    w = obj.window_ratio * (t(end) - t(1));
-    tw_idx = floor( (t - t(1)) ./ w ) + 1;
-    Tk = max( tw_idx );
-
-    % Optimization of the Lagrange multiplier
-    maxIter = 10;           % Maximum number of iterations
-    iter    = 1;            % Current iteration index
-    GoOn    = true;         % Boolean to control convergence
-
-    % Cost function
     if ( umax == Inf )
         % Call the standard Neustadt solver 
-        [t, u, e, obj] = MininumNormSolvers.NeustadtSolver.Solve(obj, epsilon, rho, alpha, init_guess);
-        return;
-    else
-        vinit = [-b; umax * ones(N,1); -zeros(n * N,1)];
-    end
-
-    while (iter < maxIter && GoOn && N > 1)
-        % Primer vector linear system
-        KronEye = kron(eye(N), -Id);  
-        KronZero = Os(1:n*N,1:Tk);
-        pPhi = [Phi KronZero KronEye];                                                   
-        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(1:n*N, 1:n*N)];
-        Theta = pinv(Theta);
-
-        % Linear cost function at each iteration grid
-        nx = m + n * N + Tk;
-        v = vinit([1:m+Tk end-(n * N)+1:end]);
-        linear_cost = [v; -zeros(size(Theta,1)-nx,1)];
-
-        % Create the functions to be solved 
-        Obj = @(x,z)( obj.objective(v, z) );
-        X_update = @(x,z,u)( obj.x_update( Theta, linear_cost, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update( cum_part(1:N), tw_idx, obj.Actuator.q, Phi, -b, rho, x, z, u) );
+        inf_solver = MinimumNormSolvers.NeustadtSolver(obj.Mission, obj.Actuator);
+        [t, u, e, obj] = inf_solver.Solve(epsilon, rho, alpha, init_guess);
+        
+    else    
+        % Pre-allocation 
+        x0 = obj.Mission.x0;                    % Initial conditions 
+        xf = obj.Mission.xf;                    % Final conditions 
     
-        % ADMM consensus constraint definition 
-        A = eye(nx);
-        B = -A;        
-        c = zeros(nx,1);
+        t = obj.Mission.t;                      % Mission clock
+        t_pruned = t;                           % Mission clock
+        N = length(t);                          % Number of total opportunities
+        STM = obj.Mission.Phi;                  % STM of the system
+        B = obj.Mission.B;                      % Control input of the system
+        m = obj.Mission.m;                      % State vector dimension
+        n = obj.Mission.n;                      % Control input dimension
     
-        % Problem
-        if ( iter == 1 && exist('init_guess', 'var') )
+        Phi = zeros(size(B,2), size(STM,1));    % Pre-allocation of the STM
+        Phi0 = STM(:,1:m);                      % Initial STM
+    
+        % Compute the STM
+        for i = 1:length(t)
+            idx = 1+n*(i-1):n*i;
+            Phi(idx,:) = ( STM(:,1+m*(i-1):m*i) \ B(:,idx) ).';
+        end
+    
+        % Compute the initial missvector
+        idx = 1 + m * ( N - 1 ) : m * N;
+        M = STM(:,idx);
+        b = (M \ xf) - (Phi0 \ x0);
+    
+        % Constant matrices  << this is for speed in a computation unit with sufficient RAM
+        M    = Phi;             % Initial STM
+        Ones = ones(1,n);       % Vectors of 1
+        Id   = eye(n);          % Identity matrix of n x n
+        Os   = zeros(n * N);    % Zero matrix of m x m
+
+        % Initial indices and time windows
+        w = obj.window_ratio * (t(end) - t(1));
+        Nw = floor( 1 / obj.window_ratio ) - 1;
+        edges = [t(1) + w * (0:Nw) t(end)];
+        tw_idx = discretize(t, edges);
+        [unique_idx, first_idx] = unique(tw_idx, 'first');
+        [~, last_idx]           = unique(tw_idx, 'last');
+        indices = [first_idx, last_idx];
+        indices = reshape( indices.', 1, [] );
+        Tk = max(unique_idx);
+
+        time_mask = logical( Os(1,1:N) );
+        time_mask(indices) = true * ones(1,length(indices)); 
+
+        % Number of impulsive opportunities 
+        Nopp = sum(time_mask);
+            
+        % Local STM 
+        index    = kron(time_mask, Ones);                       % Actuation epochs
+        curr_Phi = Phi(logical(index),:);                       % STM corresponding to the new actuation grid  
+
+        % Cost function
+        vinit = [-b; umax * 0 * ones(N,1); -Os(:,1)];           % Complete cost function
+        
+        % Index mapping of variables
+        Nx = m + Tk + n * N;                                    % Original number of variables
+        lambda_pos = 1 : m;                                     % Position of the Lagrange multiplier
+        sigma_pos  = m + 1 : m + Tk;                            % Position of the bound Lagrange multipliers
+        primer_pos = Nx + 1 - n * Nopp : Nx;                    % Position of the primer vector
+        sigma_map = tw_idx(time_mask);                          % Mapping between primer vector and Lagrange multipliers
+        [~, sigma_unique] = unique( sigma_map, 'first' );       % Mapping between primer vector and unique Lagrange multipliers
+        Sigma = zeros(Tk, 1);                                   % Original vector of Lagrange multipliers associated to the bound constraint
+
+        % Optimization of the Lagrange multiplier
+        maxIter = 10;           % Maximum number of iterations
+        iter    = 1;            % Current iteration index
+        GoOn    = N >= 2;       % Boolean to control convergence
+
+        while ( iter < maxIter && GoOn )
+            % Primer vector linear system
+            KronEye = kron( eye(Nopp), -Id );  
+            idx = 1 : n * Nopp;
+            KronZero = Os(idx,1:Tk);
+            pPhi = [curr_Phi KronZero KronEye];                                                   
+            Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(idx,idx)];
+            Theta = pinv(Theta);
+    
+            % Linear cost function at each iteration grid
+            nx = m + Tk + n * Nopp;
+            v = vinit( [lambda_pos sigma_pos primer_pos] );         % Initial cost function
+            linear_cost = [v; -zeros(size(Theta,1)-nx,1)]; 
+    
+            % Create the functions to be solved 
+            Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(v, z) );
+            X_update = @(x,z,u)( MinimumNormSolvers.NeustadtSolver.x_update( Theta, linear_cost, rho, x, z, u ) );
+            Z_update = @(x,z,u)( obj.z_update( n, sigma_pos, sigma_map, sigma_unique, obj.Actuator.q, Phi, -b, rho, x, z, u ) );
+        
+            % ADMM consensus constraint definition 
+            A = eye(nx);
+            B = -A;        
+            c = zeros(nx,1);
+        
+            % Problem solve
             Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
-        else
-            Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
-        end
-
-        Solv.alpha = alpha;
-        Solv.QUIET = false;
-
-        % Solve the problem
-        tic
-        [x, ~, Output] = Solv.solver();
-        obj.SolveTime = toc;
-
-        % Output
-        lambda = reshape(x(1:m,end), 1, []).';          % Lagrange multiplier
-        sigma = reshape(x(m+1:m+Tk,end), 1, []).';      % Lagrange multiplier associated to the control bound
-        p = Phi * lambda;                               % Primer vector
-        p = reshape(p, n, N);                           % Primer vector
-        p_norm = obj.Actuator.q.ComputeVectorNorm( p ); % Switching surface
-        
-        % Check for convergence
-        sigma = sigma(tw_idx);                      % Extend sigma over the time windows
-
-        if ( all( p_norm <= (1 + sigma) + epsilon(1) ) )
-            % Convergence
-            GoOn = false;
-        else
-            % Reduce the number of points to analyze
-            index = p_norm >= (1 + sigma.') - epsilon(2); % Plausible actuation epochs
-            N = sum(index);                               % Density of the grid
-            t_pruned = t_pruned( logical(index)  );       % Actuation epochs
-            index = kron(index, Ones);                    % Actuation epochs
-            Phi = Phi(logical(index),:);                  % STM corresponding to the new actuation grid
-
-            % Update the time window
-            tw_idx = floor( (t_pruned - t(1)) ./ w ) + 1;
-            Tk = max( tw_idx );
-
-            % Update the iteration counter
-            iter = iter + 1;
-        end
-    end
     
-    % Computation of the control law
-    if ( Output.Result )
-        % Final output 
-        u = [lambda; M * lambda];       % Adjoint vector at final epoch and primer vector
-
-        % Input reconstruction 
-        [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t_pruned, b, Phi, p_norm, epsilon);
-
-        % Complete action sequence
-        dV = zeros( n, length(t) );               
-        for i = 1:length(t_pruned)
-            dV(:, t_pruned(i) == t) = dv(:,i);
-        end
+            Solv.alpha = alpha;
+            Solv.QUIET = false;
     
-        % Output
-        e = b - M.' * reshape(dV, [], 1);           % Regulation error
-        obj.e(:,1) = e;                             % Final missvector   
-        obj.Cost = dot(b, lambda);                  % Final minimum-norm cost
-        obj.Report = Output;                        % Optimization report
-        obj.u = dV;                                 % Final impulsive sequence
-        obj.t = t;                                  % Execution times
-        
-    else
-        % TODO: see what is needed here
-        % Check the q-norm of the primer vector on the z-update
-%         p = reshape( z(m+1:end,end), n, [] );
-%         p_norm = obj.Actuator.q.ComputeVectorNorm( p );
+            % Solve the problem
+            tic
+            [x, ~, Output] = Solv.solver();
+            obj.SolveTime = toc;
+    
+            % Output
+            lambda = reshape(x(lambda_pos,end), 1, []).';          % Lagrange multiplier
+            
+            sigma = reshape(x(sigma_pos,end), 1, []).';      % Lagrange multiplier associated to the control bound
+%             Sigma(sigma_) = sigma;                       % Update the complete set of Lagrange multipliers
+            
+            p = Phi * lambda;                               % Primer vector
+            p = reshape(p, n, N);                           % Primer vector
+            
+            % Check for convergence
+            p_norm = obj.Actuator.q.ComputeVectorNorm( p ); % Switching surface
+          
+            if ( any( p_norm > (1 + sigma(sigma_map)) + epsilon ) )
+                % Time-window analysis
+                for i = 1:Tk
+                    % Include the new maximum per time window
+                    pos = 1 + 2 * (i-1):2 * i;
+                    range = indices(pos);
+                    tw_norm = p_norm( range(1):range(2) );
+                    [~, pos] = sort( tw_norm );
+                    time_mask( pos(end) ) = true;
 
-        u  = []; 
-        e  = [];
+                    % Do not include the non-plausible actuation epochs
+                    index = tw_norm < (1 + sigma(i)) - epsilon;                
+                    time_mask( index ) = zeros(1, sum(index));
+                end
+    
+                % Update the time window
+                sigma_map = tw_idx(time_mask);
+                [unique_idx, sigma_unique] = unique(sigma_map, 'first');
+                Tk = max(unique_idx);
+
+                Nopp = sum(time_mask);                              % Number of impulsive opportunities 
+                sigma_pos  = m + 1 : m + Tk;                        % Position of the bound Lagrange multipliers
+                primer_pos = Nx + 1 - n * Nopp : Nx;                % Position of the primer vector
+            
+                % Local STM 
+                index    = kron(time_mask, Ones);                   % Actuation epochs
+                curr_Phi = Phi(logical(index),:);                   % STM corresponding to the new actuation grid
+
+                % Update initial guess
+                p = curr_Phi * lambda;                              % Initial guess for the primer vector
+                sigma = Sigma(sigma_pos);                           % Initial guess for the Lagrange multipliers
+
+                init_guess.x = [lambda; sigma; reshape(p, [], 1)];
+                init_guess.x = init_guess.z;
+
+                % Update the iteration counter
+                iter = iter + 1;
+            else
+                % Convergence
+                GoOn = false;
+            end
+        end
+        
+        % Computation of the control law
+        if ( Output.Result )
+            % Final output 
+            u = [lambda; M * lambda];       % Adjoint vector at final epoch and primer vector
+    
+            % Input reconstruction 
+            [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t, b, Phi, p_norm, epsilon);
+    
+            % Complete action sequence
+            dV = zeros( n, length(t) );               
+            for i = 1:length(t_pruned)
+                dV(:, t_pruned(i) == t) = dv(:,i);
+            end
+        
+            % Output
+            e = b - M.' * reshape(dV, [], 1);           % Regulation error
+            obj.e(:,1) = e;                             % Final missvector   
+            obj.Cost = dot(b, lambda);                  % Final minimum-norm cost
+            obj.Report = Output;                        % Optimization report
+            obj.u = dV;                                 % Final impulsive sequence
+            obj.t = t;                                  % Execution times
+            
+        else
+            % TODO: see what is needed here
+            % Check the q-norm of the primer vector on the z-update
+    %         p = reshape( z(m+1:end,end), n, [] );
+    %         p_norm = obj.Actuator.q.ComputeVectorNorm( p );
+    
+            u  = []; 
+            e  = [];
+        end
     end
 end
