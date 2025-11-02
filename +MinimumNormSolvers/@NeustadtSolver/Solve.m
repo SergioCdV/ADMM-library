@@ -24,6 +24,10 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         alpha = 1;
     end
 
+    if ( ~exist('init_guess', 'var') )
+        init_guess = [];
+    end
+
     % Pre-allocation 
     x0 = obj.Mission.x0;                    % Initial conditions 
     xf = obj.Mission.xf;                    % Final conditions 
@@ -55,26 +59,26 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     Id   = eye(n);          % Identity matrix of n x n
     Os   = zeros(n * N);    % Zero matrix of n * N x n * N
 
+    % Initial indices 
+    time_mask = logical( Os(1,1:N) );
+    time_mask([1 floor(N/2) end]) = true * ones(1,3); 
+
+    % Number of impulsive opportunities 
+    Nopp = sum(time_mask);
+
+    % Local STM 
+    index    = kron(time_mask, Ones);               % Actuation epochs
+    curr_Phi = Phi(logical(index),:);               % STM corresponding to the new actuation grid
+
+    % Cost function
+    vinit = [-b; -Os(:,1)];
+
     % Optimization of the Lagrange multiplier
     maxIter = 20;           % Maximum number of iterations
     iter    = 1;            % Current iteration index
     GoOn    = N >= 2;       % Boolean to control convergence
 
-    % Initial indices 
-    time_mask = logical( Os(1,1:N) );
-    time_mask([1 floor(N/2) end]) = true * ones(1,3); 
-
-    % Cost function
-    vinit = [-b; -Os(:,1)];
-
     while ( iter < maxIter && GoOn )
-        % Number of impulsive opportunities 
-        Nopp = sum(time_mask);
-
-        % Local STM 
-        index    = kron(time_mask, Ones);               % Actuation epochs
-        curr_Phi = Phi(logical(index),:);               % STM corresponding to the new actuation grid
-
         % Primer vector linear system
         KronEye = kron( eye(Nopp), -Id );                            
         pPhi = [curr_Phi KronEye];                                    
@@ -97,12 +101,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         B = -A;        
         c = zeros(nx,1);
     
-        % Problem
-        if ( iter == 1 && exist( 'init_guess', 'var' ) )
-            Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
-        else
-            Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
-        end
+        % Problem solve
+        Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
 
         Solv.alpha = alpha;
         Solv.QUIET = false;
@@ -131,6 +131,18 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             % Do not include the non-plausible actuation epochs
             index = p_norm < 1 - epsilon;                
             time_mask( index ) = zeros(1, sum(index));
+
+            % Number of impulsive opportunities 
+            Nopp = sum(time_mask);
+
+            % Local STM 
+            index    = kron(time_mask, Ones);               % Actuation epochs
+            curr_Phi = Phi(logical(index),:);               % STM corresponding to the new actuation grid
+
+            % Update initial guess 
+            p = curr_Phi * lambda;                          % New primer vector initial guess
+            init_guess.x = [lambda; reshape(p, [], 1)];    
+            init_guess.z = init_guess.x; 
 
             % Update the iteration counter
             iter = iter + 1;
