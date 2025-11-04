@@ -54,14 +54,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     b = (M \ xf) - (Phi0 \ x0);
 
     % Constant matrices  << this is for speed in a computation unit with sufficient RAM
-    M    = Phi;             % Initial STM
     Ones = ones(1,n);       % Vectors of 1
     Id   = eye(n);          % Identity matrix of n x n
     Os   = zeros(n * N);    % Zero matrix of n * N x n * N
 
     % Initial indices 
     time_mask = logical( Os(1,1:N) );
-    time_mask([1 floor(N/2) end]) = true * ones(1,3); 
+    time_mask([1 floor(N/2) end]) = true; 
 
     % Number of impulsive opportunities 
     Nopp = sum(time_mask);
@@ -76,9 +75,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     % Optimization of the Lagrange multiplier
     maxIter = 20;           % Maximum number of iterations
     iter    = 1;            % Current iteration index
-    GoOn    = N >= 2;       % Boolean to control convergence
+    GoOn    = Nopp >= 2;    % Boolean to control convergence
 
-    while ( iter < maxIter && GoOn )
+    while ( iter < maxIter && GoOn && Nopp > 0 )
         % Primer vector linear system
         KronEye = kron( eye(Nopp), -Id );                            
         pPhi = [curr_Phi KronEye];                                    
@@ -121,7 +120,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         p_norm = obj.Actuator.q.ComputeVectorNorm( p ); % Switching surface
         [max_p, pos] = sort(p_norm);
 
-        if ( max_p(end) <= 1 + epsilon )
+        if ( max_p(end) <= 1 + epsilon && Output.Result )
             % Convergence
             GoOn = false;
         else
@@ -130,7 +129,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
             % Do not include the non-plausible actuation epochs
             index = p_norm < 1 - epsilon;                
-            time_mask( index ) = zeros(1, sum(index));
+            time_mask( index ) = 0;
 
             % Number of impulsive opportunities 
             Nopp = sum(time_mask);
@@ -150,12 +149,12 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     end
 
     % Computation of the control law
-    if ( Output.Result )
+    if ( ~GoOn )
         % Final output 
-        u = [lambda; M * lambda];       % Adjoint vector at final epoch and primer vector
+        u = [lambda; Phi * lambda];       % Adjoint vector at final epoch and primer vector
 
         % Input reconstruction 
-        [t_pruned, dv] = obj.ImpulseReconstruction(t, b, Phi, p_norm, epsilon);
+        [t_pruned, dv] = obj.ImpulseReconstruction(t, b, Phi, p_norm, 1, epsilon);
 
         % Complete action sequence
         dV = zeros( n, length(t) );               
@@ -164,7 +163,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         end
     
         % Output
-        e = b - M.' * reshape(dV, [], 1);           % Regulation error
+        e = b - Phi.' * reshape(dV, [], 1);         % Regulation error
         obj.e(:,1) = e;                             % Final missvector   
         obj.Cost = dot(b, lambda);                  % Final minimum-norm cost
         obj.Report = Output;                        % Optimization report
@@ -177,7 +176,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 %         p = reshape( z(m+1:end,end), n, [] );
 %         p_norm = obj.Actuator.q.ComputeVectorNorm( p );
 
-        u  = []; 
-        e  = [];
+        u  = zeros(m + n * N,1); 
+        e  = b;
     end
 end

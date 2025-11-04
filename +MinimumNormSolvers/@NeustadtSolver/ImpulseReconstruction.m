@@ -17,13 +17,13 @@
 % Outputs: - vector t, of dimensions 1 x N, at which the control is to be applied (maneuver execution times)
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
 
-function [t, u] = ImpulseReconstruction(t, b, Y, p_norm, epsilon)
+function [t, u] = ImpulseReconstruction(t, b, Y, p_norm, a, epsilon)
     % Constants
     N = size(t,2);        % Number of control epochs
     n = size(Y,1) / N;    % Control dimension
 
     % Impulsive epochs
-    imp_opp = abs(p_norm - 1) <= epsilon;
+    imp_opp = abs(p_norm - a) <= epsilon;
 
     if ( sum(imp_opp) > 1E3 )
  % TODO: analysis based on the derivative of the primer vector

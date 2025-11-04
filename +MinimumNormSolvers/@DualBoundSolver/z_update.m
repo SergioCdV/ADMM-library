@@ -29,16 +29,16 @@ function [z] = z_update(n, og_idx, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, 
     p = y(og_idx(end)+1:end);    % Primer vector
     p = reshape(p, n, []);
 
-    sigma = y(og_idx);           % Lagrange multipliers associated to the control bound
+    sigma = y(og_idx).';         % Lagrange multipliers associated to the control bound
     sigma = sigma(sigma_map);    % Lagrange multiplier associated to each impulse
 
     % Projection onto the ball epigraph
-%     [p, sigma] = handl_( p, 0 * sigma );
+    [p, sigma] = handl_( p, sigma );
 
     % Lagrange multiplier update (projection on a half space)
     lambda = y(1:m);
     lambda = src.HalfSpaceProx.projection(b, 0, lambda);
 
     % Final vector
-    z = [lambda; sigma(sigma_unique); reshape(p, [], 1)];
+    z = [lambda; sigma(sigma_unique).'; reshape(p, [], 1)];
 end

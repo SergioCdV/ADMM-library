@@ -22,11 +22,12 @@ classdef L2BallProx < src.ProxOperator
 
     methods (Static)
         % Projection onto an L2-ball 
-        function [x] = projection(a, x)
-            norm_ = vecnorm( x );
+        function [y] = projection(a, x)
+            y = x;
+            norm_ = vecnorm( y, 2, 1 );
             idx = norm_ > a;
             if any(idx)
-                x(:,idx) = a * x(:,idx) ./ norm_(idx);
+                y(:,idx) = a * x(:,idx) ./ norm_(idx);
             end
         end
     end

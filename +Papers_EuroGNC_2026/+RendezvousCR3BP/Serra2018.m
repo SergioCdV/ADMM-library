@@ -39,7 +39,7 @@ x0 = x0.';
 xf = xf.';
 
 % Number of possible impulses 
-N = 100;
+N = 150;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -72,7 +72,7 @@ myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 1;                                            % Maximum control authority
+dVmax = 0.9;                                            % Maximum control authority
 myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization

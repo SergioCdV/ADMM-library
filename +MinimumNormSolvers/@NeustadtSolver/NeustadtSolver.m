@@ -37,7 +37,7 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
         [z] = z_update(n, q, Phi, b, rho, x, z, u);
         
         % Input reconstruction
-        [t, u] = ImpulseReconstruction(t, b, Y, p_norm, epsilon)
+        [t, u] = ImpulseReconstruction(t, b, Y, p_norm, a, epsilon)
     end
 
 end

@@ -26,20 +26,22 @@ classdef L2EpigraphProx < src.ProxOperator
             % Projection over the epigraph
             y = x; 
             sigma = t; 
+            ep = a + t;
 
-            norm_ = vecnorm( x );
-            idx = norm_ > a + t;
-
+            % Inactive constraint
+%             zero_idx = sigma <= 0;
+%             y(:,zero_idx) = src.L2BallProx.projection(a, x(:,zero_idx));
+            
+            % Active constraints
+            norm_ = vecnorm( x, 2, 1 );
+            idx = norm_ > ep;
             if ( sum(idx) )
-                alpha = (norm_(idx) + a + t) ./ (2 * norm_(idx));
+                r = norm_(idx);
+                C = r + ep(idx);
+                alpha = C ./ (2 * r);
+                alpha = alpha .* sign(alpha);
                 y(:,idx) = alpha .* x(:,idx);
-                sigma = alpha * norm_(idx) - a;                         % << this is not fully vectorized
-                
-                % Check the nonnegativity of t
-                if ( sigma < 0 )
-                    sigma = 0;
-                    y(:,idx) = a * x(:,idx) / norm_(idx);
-                end
+                sigma(idx) = alpha .* r - a;                         
             end
         end
     end
