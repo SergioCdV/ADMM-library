@@ -14,7 +14,4 @@ function [x] = x_update(Phi, c, idx, rho, ~, z, u)
    c(1:nx) = c(1:nx) - rho * (z - u);
    x = -Phi * c;
    x = x(1:nx);
-    
-   % Projection onto the positive orthant
-   x(idx) = max(x(idx), 0);
 end

@@ -60,11 +60,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         idx = 1 + m * ( N - 1 ) : m * N;
         M = STM(:,idx);
         b = (M \ xf) - (Phi0 \ x0);
-    
-        % Constant matrices  << this is for speed in a computation unit with sufficient RAM
-        Ones = ones(1,n);                                       % Vectors of 1
-        Id   = eye(n);                                          % Identity matrix of n x n
-        Os   = zeros(n * N);                                    % Zero matrix of m x m
 
         % Initial time window and the corresponding indices
         w = obj.window_ratio * (t(end) - t(1));                 % Time duration of each window
@@ -80,21 +75,27 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
         Tk = numel(unique_idx);                                 % Number of active windows
         Sigma = zeros(1,Tk);                                    % Original vector of Lagrange multipliers associated to the bound constraint
+        Slack = zeros(1,Tk);                                    % Original vector of slack Lagrange multipliers associated to the bound constraint
         
+        % Constant matrices  << this is for speed in a computation unit with sufficient RAM
+        Nx = m + 2 * Tk + n * N;                                % Original number of variables
+        Ones = ones(1,Nx);                                      % Vectors of 1
+        Id   = eye(Nx);                                         % Identity matrix of n x n
+        Os   = zeros(Nx);                                       % Zero matrix of nN x nN
+
         % Initial time mask
         time_mask = logical( Os(1,1:N) );                       % Pre-allocation      
         time_mask(edge_idx) = true;                             % Initial time mask
         Nopp = sum(time_mask);                                  % Number of impulsive opportunities 
 
         % Local STM                 
-        index    = kron(time_mask, Ones);                       % Actuation epochs
+        index    = kron(time_mask, Ones(1,1:n));                % Actuation epochs
         curr_Phi = Phi(logical(index),:);                       % STM corresponding to the new actuation grid  
 
-        % Cost function
-        vinit = [-b; +umax * ones(Tk,1); +Os(:,1)];             % Complete cost function
+        % Complete cost function
+        vinit = [-b; +umax * ones(Tk,1); zeros(Tk,1); +Os(:,1)]; 
         
         % Index mapping of variables
-        Nx = m + Tk + n * N;                                    % Original number of variables
         lambda_pos = 1 : m;                                     % Position of the Lagrange multiplier
         sigma_pos  = m + 1 : m + Tk;                            % Position of the bound Lagrange multipliers
         primer_pos = Nx + 1 - n * Nopp : Nx;                    % Position of the primer vector
@@ -109,17 +110,23 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
         while ( iter < maxIter && GoOn && Nopp > 0 )
             % Primer vector linear system
-            KronEye = kron( eye(Nopp), -Id );  
+            KronEye = kron( eye(Nopp), -Id(1:n,1:n) );  
             idx = 1 : n * Nopp;
-            KronZero = Os(idx,1:Tk);
-            pPhi = [curr_Phi KronZero KronEye];                                                   
-            Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(idx,idx)];
+            KronZero = Os(idx,1: 2 * Tk);
+            primer_system = [curr_Phi KronZero KronEye];
+
+            % Augmented slack variables system 
+            slack_system = [Os(1:Tk,1:m) -Id(1:Tk,1:Tk) Id(1:Tk,1:Tk) Os(1:Tk,idx)];
+            
+            % Pre-allocation of the pseudoinverse of the linear inverse
+            pPhi = [primer_system; slack_system];
+            Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
             Theta = pinv(Theta);
     
             % Linear cost function at each iteration grid
-            nx = m + Tk + n * Nopp;                                 % Number of decision variables
-            v = vinit( [lambda_pos sigma_pos primer_pos] );         % Current cost function
-            linear_cost = [v; -zeros(size(Theta,1)-nx,1)];          % KKT cost function
+            nx = m + 2 * Tk + n * Nopp;                                            % Number of decision variables
+            v = vinit( [lambda_pos sigma_pos Tk + sigma_pos primer_pos] );         % Current cost function
+            linear_cost = [v; -zeros(size(Theta,1)-nx-Tk,1); -Ones(1,1:Tk).'];     % KKT cost function
     
             % Create the functions to be solved 
             Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(v, z) );
@@ -143,13 +150,15 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             obj.SolveTime = toc;
     
             % Output
-            lambda = reshape(x(lambda_pos,end), 1, []).';          % Lagrange multiplier
-            sigma  = reshape(x(sigma_pos,end), 1, []).';           % Lagrange multiplier associated to the control bound
-            p = Phi * lambda;                                      % Primer vector
-            p = reshape(p, n, N);                                  % Primer vector
+            lambda = x(lambda_pos,end);          % Lagrange multiplier
+            sigma  = x(sigma_pos ,end);          % Lagrange multiplier associated to the control bound
+            slackT = x(Tk + sigma_pos,end);      % Slack variables associated to the Lagrange multipliers
+            p      = Phi * lambda;               % Primer vector
+            p      = reshape(p, n, N);           % Primer vector
 
             % Update the complete set of Lagrange multipliers
-            Sigma(unique_idx) = sigma;                             
+            Sigma(unique_idx) = sigma;  
+            Slack(unique_idx) = slackT;
             
             % Check for convergence
             p_norm = obj.Actuator.q.ComputeVectorNorm( p );        % Switching surface
@@ -183,14 +192,15 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
                 primer_pos = Nx + 1 - n * Nopp : Nx;                % Position of the primer vector
             
                 % Local STM 
-                index    = kron(time_mask, Ones);                   % Actuation epochs
+                index    = kron(time_mask, Ones(1,1:n));            % Actuation epochs
                 curr_Phi = Phi(logical(index),:);                   % STM corresponding to the new actuation grid
 
                 % Update initial guess
                 p = curr_Phi * lambda;                              % Initial guess for the primer vector
                 sigma = Sigma(unique_idx);                          % Initial guess for the Lagrange multipliers
+                slackT = Slack(unique_idx);                         % Initial guess for the slack variables
 
-                init_guess.x = [lambda; sigma.'; reshape(p, [], 1)];
+                init_guess.x = [lambda; sigma.'; slackT.'; reshape(p, [], 1)];
                 init_guess.z = init_guess.x;
 
                 init_guess = [];
