@@ -42,20 +42,30 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     b = xf - M * x0;
 
     % Pre-factoring of constants
-    Atb = pinv(Phi) * b;
-    pInvA = eye(size(Phi,2)) - pinv(Phi) * Phi;
-
-    % Create the functions to be solved 
-    Obj = @(x,z)( obj.objective(obj.Actuator.p, x) );
-    X_update = @(x,z,u)( obj.x_update(pInvA, Atb, x, z, u) );
-    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.p, obj.Actuator.q, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u) );
-
-    % ADMM consensus constraint definition 
     nx = n * N;
     Id = eye(nx);
+    c = zeros(nx,1);
+
+    % Equilibration
+    [~, ePhi, ~, D1, D2] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
+    eb = (D1 .* b.').';
+
+    umax = obj.Actuator.umax;
+    umin = obj.Actuator.umin;
+
+    % Normal equations
+    invPhi = pinv(ePhi);
+    Atb    = invPhi * eb;
+    pInvA  = Id - invPhi * ePhi;
+
+    % Create the functions to be solved 
+    Obj      = @(x,z)  ( obj.objective(obj.Actuator.p, x) );
+    X_update = @(x,z,u)( obj.x_update(pInvA, Atb, x, z, u) );
+    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.p, obj.Actuator.q, umin, umax, obj.Mission.N, rho, x, z, u) );
+
+    % ADMM consensus constraint definition 
     A = Id;
     B = -A;        
-    c = zeros(nx,1);
 
     % Problem
     Problem = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c);
@@ -72,9 +82,12 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     [x, ~, Output] = Problem.solver();
     obj.SolveTime = toc;
 
+    % Undo the equilibration 
+    x(:,end) = ( D2 .* x(:,end).' ).';
+
     % Output 
     u = reshape(x(:,end), n, []);        % Control sequence
-    
+
     obj.Cost = obj.Actuator.p.ComputeVectorNorm( u );
     obj.Cost = sum( obj.Cost );
 

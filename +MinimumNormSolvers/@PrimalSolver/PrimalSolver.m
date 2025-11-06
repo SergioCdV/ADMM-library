@@ -36,5 +36,4 @@ classdef PrimalSolver < MinimumNormSolvers.SolverMinimumNorm
         [x] = x_update(pInvA, Atb, x, z, u);
         [z] = z_update(indices, p, q, umin, umax, K, rho, x, z, u);
     end
-
 end
