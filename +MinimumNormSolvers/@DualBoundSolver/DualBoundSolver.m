@@ -10,7 +10,7 @@
 
 classdef DualBoundSolver < MinimumNormSolvers.NeustadtSolver
     properties (Access = private)
-        window_ratio = 0.05;            % Percentage of time windows over the grid
+        window_ratio = 1.0;            % Percentage of time windows over the grid
     end
 
     % Methods

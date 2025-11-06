@@ -34,8 +34,12 @@ function [z] = z_update(n, og_idx, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, 
     p = reshape(p, n, []);
 
     % Vectorization of variables
-    t = y(Tk + og_idx).';              % Lagrange multipliers associated to the control bound
-    t = t(sigma_map);                  % Lagrange multiplier associated to each impulse
+    t = y(Tk + og_idx);                % Lagrange multipliers associated to the control bound
+    t = t(sigma_map).';                % Lagrange multiplier associated to each impulse
+
+    if ( size(t,1) ~= 1 )
+        t = t.';
+    end
 
     % Projection onto the corresponding epigraph
     [p, t] = handl_( p, t );

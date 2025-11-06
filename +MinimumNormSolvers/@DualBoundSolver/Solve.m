@@ -104,7 +104,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         [~, sigma_unique] = unique( sigma_map, 'first' );       % Mapping between primer vector and unique Lagrange multipliers
 
         % Optimization of the Lagrange multiplier
-        maxIter = 10;                                           % Maximum number of iterations
+        maxIter = 20;                                           % Maximum number of iterations
         iter    = 1;                                            % Current iteration index
         GoOn    = N >= 2;                                       % Boolean to control convergence
 
@@ -122,11 +122,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             pPhi = [primer_system; slack_system];
             Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
             Theta = pinv(Theta);
-    
+
             % Linear cost function at each iteration grid
             nx = m + 2 * Tk + n * Nopp;                                            % Number of decision variables
             v = vinit( [lambda_pos sigma_pos Tk + sigma_pos primer_pos] );         % Current cost function
-            linear_cost = [v; -zeros(size(Theta,1)-nx-Tk,1); -Ones(1,1:Tk).'];     % KKT cost function
+
+            linear_b = [zeros(size(Theta,1)-nx-Tk,1); Ones(1,1:Tk).'];             % Independent term in the linear system
+            linear_cost = [v; -linear_b];                                          % KKT cost function
     
             % Create the functions to be solved 
             Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(v, z) );
@@ -163,7 +165,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             % Check for convergence
             p_norm = obj.Actuator.q.ComputeVectorNorm( p );        % Switching surface
           
-            if ( all( p_norm <= (1 + Sigma(tw_idx)) + epsilon ) && Output.Result )
+            if ( all( p_norm <= Slack(tw_idx) + epsilon ) && Output.Result )
                 % Convergence
                 GoOn = false;
             else
@@ -184,6 +186,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     
                 % Update the time window
                 [unique_idx, sigma_unique, sigma_map] = unique( tw_idx( time_mask ), 'first' );
+                sigma_map = sigma_map.';
                 Tk = numel(unique_idx);
 
                 % Update the number of variables
@@ -197,18 +200,18 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
                 % Update initial guess
                 p = curr_Phi * lambda;                              % Initial guess for the primer vector
-                sigma = Sigma(unique_idx);                          % Initial guess for the Lagrange multipliers
+                sigma  = Sigma(unique_idx);                         % Initial guess for the Lagrange multipliers
                 slackT = Slack(unique_idx);                         % Initial guess for the slack variables
 
                 init_guess.x = [lambda; sigma.'; slackT.'; reshape(p, [], 1)];
                 init_guess.z = init_guess.x;
 
-                init_guess = [];
-
                 % Update the iteration counter
                 iter = iter + 1;
             end
         end
+
+        Sigma
         
         % Computation of the control law
         if ( 1 )%~GoOn )
@@ -216,7 +219,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             u = [lambda; Phi * lambda];       % Adjoint vector at final epoch and primer vector
     
             % Input reconstruction 
-            [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t, b, Phi, p_norm, 1 + Sigma(tw_idx), epsilon);
+            [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t, b, Phi, p_norm, Slack(tw_idx), epsilon);
     
             % Complete action sequence
             dV = zeros( n, length(t) );               

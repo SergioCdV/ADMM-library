@@ -27,7 +27,7 @@ classdef SolverADMM
         u;                          % Lagrange penalizer
 
         % Method hyperparameters
-        alpha = 0;                  % Relaxation coefficient
+        alpha = 0.0;                  % Relaxation coefficient
         MaxIter = 1e4;              % Maximum number of iterations
         AbsTol = 1e-9;              % Absolute tolerance
         RelTol = 1e-6;              % Relative tolerance

@@ -39,7 +39,7 @@ x0 = x0.';
 xf = xf.';
 
 % Number of possible impulses 
-N = 150;
+N = 100;
 
 %% Define the rendezvous problem and the STM %%
 % Time span
@@ -72,7 +72,7 @@ myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
-dVmax = 0.9;                                            % Maximum control authority
+dVmax = 0.1;                                            % Maximum control authority
 myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
@@ -86,11 +86,11 @@ dV = zeros(3 * 2, N);               % Impulses of the two algorithms
 
 % Optimization
 rho = 1/N;                          % AL parameter 
-eps = 1E-5;                         % Numerical tolerance
+eps = 2E-3;                         % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
+    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(1/5));
     time(1,i) = myDualProblemSolved.SolveTime;
 
     lambda = reshape(sol(1:6), 6, []);
