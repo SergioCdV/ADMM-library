@@ -47,7 +47,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     c = zeros(nx,1);
 
     % Equilibration
-    [~, ePhi, ~, D1, D2] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
+    [~, ePhi, ~, D1, ~] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
     eb = (D1 .* b.').';
 
     umax = obj.Actuator.umax;
@@ -81,9 +81,6 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     tic
     [x, ~, Output] = Problem.solver();
     obj.SolveTime = toc;
-
-    % Undo the equilibration 
-    x(:,end) = ( D2 .* x(:,end).' ).';
 
     % Output 
     u = reshape(x(:,end), n, []);        % Control sequence
