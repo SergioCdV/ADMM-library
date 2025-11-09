@@ -13,12 +13,13 @@
 %          - scalar rho, the augmented Lagrangian penalty parameter (rho > 0)
 %          - scalar alpha, the overfitting parameter (2 > alpha > 0)
 %          - vector init_guess, an initial guess for the optimization
+%          - bool equil_flag, to use or not Ruiz equilibration
 
 % Outputs: - vector t, of dimensions 1 x N, at which the control is to be applied (maneuver execution times)
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
 %          - vector e, of dimensions m x 1, the final rendezvous missvector
 
-function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
+function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag)
     % Sanity checks 
     if ( ~exist('alpha', 'var') )
         alpha = 1;
@@ -26,6 +27,10 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
     if ( ~exist('init_guess', 'var') )
         init_guess = [];
+    end
+
+    if ( ~exist('equil_flag', 'var') )
+        equil_flag = false;
     end
 
     % Pre-allocation 
@@ -55,7 +60,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
     % Constant matrices  << this is for speed in a computation unit with sufficient RAM
     Ones = ones(1,n);       % Vectors of 1
-    Id   = eye(n);          % Identity matrix of n x n
+    Id   = eye(n * N);      % Identity matrix of n * N x n * N
     Os   = zeros(n * N);    % Zero matrix of n * N x n * N
 
     % Initial indices 
@@ -79,21 +84,36 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
 
     while ( iter < maxIter && GoOn && Nopp > 0 )
         % Primer vector linear system
-        KronEye = kron( eye(Nopp), -Id );                            
-        pPhi = [curr_Phi KronEye];                                    
         idx = 1 : n * Nopp;
-        Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi Os(idx,idx)];
-        Theta = pinv(Theta);
+        KronEye = -Id(idx,idx);                            
+        pPhi = [curr_Phi KronEye];                                    
 
         % Linear cost function at each iteration grid
         nx = m + n * Nopp;
         v = vinit(1:nx);
-        linear_cost = [v; -zeros(size(Theta,1)-nx,1)];
+        b_dual = Os(1:sum(size(pPhi))-nx,1);
+
+        % Equilibration 
+        if ( equil_flag )
+            [ev, epPhi, ~, D1, ~] = src.RuizEquil( v, pPhi, 1E-6, 'L' );
+            eb_dual = (D1 .* b_dual.').';
+        else
+            ev = v;
+            epPhi = pPhi;
+            eb_dual = b_dual;
+        end
+
+        % Dual linear system
+        linear_cost = [ev; -eb_dual];
+        Theta = [rho * Id(1:nx,1:nx) epPhi.'; epPhi Os(idx,idx)];
+
+        % Normal equations
+        invTheta = pinv(Theta);
     
         % Create the functions to be solved 
-        Obj = @(x,z)( obj.objective(v, z) );
-        X_update = @(x,z,u)( obj.x_update(Theta, linear_cost, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.q, Phi, -b, rho, x, z, u) );
+        Obj = @(x,z)( obj.objective(ev, z) );
+        X_update = @(x,z,u)( obj.x_update(invTheta, linear_cost, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update(m, n, obj.Actuator.q, ev(1:m), rho, x, z, u) );
     
         % ADMM consensus constraint definition 
         A = eye(nx);
@@ -149,9 +169,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
     end
 
     % Computation of the control law
-    if ( ~GoOn )
+    if ( 1 )%~GoOn )
         % Final output 
-        u = [lambda; Phi * lambda];       % Adjoint vector at final epoch and primer vector
+        u = [lambda; Phi * lambda];                 % Adjoint vector at final epoch and primer vector
 
         % Input reconstruction 
         [t_pruned, dv] = obj.ImpulseReconstruction(t, b, Phi, p_norm, 1, epsilon);

@@ -34,7 +34,7 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
         % ADMM functions
         [p] = objective(c, x);
         [x] = x_update(Phi, c, rho, x, z, u);
-        [z] = z_update(n, q, Phi, b, rho, x, z, u);
+        [z] = z_update(m, n, q, b, rho, x, z, u);
         
         % Input reconstruction
         [t, u] = ImpulseReconstruction(t, b, Y, p_norm, a, epsilon)

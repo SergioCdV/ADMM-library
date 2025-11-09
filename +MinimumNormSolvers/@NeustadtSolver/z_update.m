@@ -8,9 +8,8 @@
 %% Z update %% 
 % ADMM problem function to update the Z sequence via proximal minimization
 
-function [z] = z_update(n, q, Phi, b, ~, x, ~, u)
+function [z] = z_update(m, n, q, b, ~, x, ~, u)
     % Constants 
-    m = size(Phi,2);
     y = x + u;
 
     % Projection of the primer vector on the unit lq-ball
