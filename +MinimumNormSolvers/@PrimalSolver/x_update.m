@@ -9,5 +9,5 @@
 % ADMM problem function to update the X sequence via proximal minimization
 
 function [x] = x_update(pInvA, Atb, ~, z, u) 
-   x = pInvA * (z - u) + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
+    x = pInvA * (z - u) + Atb;                     % Impulses update (proximal minimization of the flow indicator function: Ax = b)
 end

@@ -66,7 +66,7 @@ function [t, u, e, obj] = Solve(obj, rho, alpha, equil_flag)
     % Normal equations
     invPhi = pinv(ePhi);
     Atb    = invPhi * eb;
-    pInvA  = Id - invPhi * ePhi;
+    pInvA  = Id - invPhi * ePhi;    
 
     % Create the functions to be solved 
     Obj      = @(x,z)  ( obj.objective(obj.Actuator.p, x) );
