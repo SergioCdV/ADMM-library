@@ -16,7 +16,7 @@
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
 %          - vector e, of dimensions m x 1, the final rendezvous missvector
 
-function [t, u, e, obj] = Solve(obj, rho, alpha)
+function [t, u, e, obj] = Solve(obj, rho, alpha, equil_flag)
     % Preallocation 
     x0 = obj.Mission.x0;                    % Initial conditions 
     xf = obj.Mission.xf;                    % Final conditions 
@@ -34,25 +34,45 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     for i = 1:length(t)
         cntrl_index = 1 + n * (i - 1) : n * i;
         state_idx = 1 + m * (i - 1) : m * i;
+
         Phi(:,cntrl_index) = ( M / STM(:,state_idx) ) * B(:,cntrl_index);
     end
-
-    A = [(1 + rho) * eye(size(Phi,2)) Phi.'; Phi zeros(size(Phi,1))];
-    A = pinv(A);
 
     % Compute the initial missvector
     b = xf - M * x0;
 
+    % Pre-factoring of constants
+    nx = n * N;
+    Id = eye(nx);
+    c = zeros(nx,1);
+
+    A = [(1 + rho) * eye(size(Phi,2)) Phi.'; Phi zeros(size(Phi,1))];
+    A = pinv(A);
+
+    % Equilibration
+    if ( ~exist('equil_flag', 'var') )
+        equil_flag = true;
+    end
+
+    if ( equil_flag )
+        [~, eA, ~, D1, ~] = src.RuizEquil( zeros(size(Phi,2),1), A, 1E-6, 'L' );
+        eb = (D1 .* b.').';
+    else
+        eA = A; 
+        eb = b;
+    end
+
+    umax = obj.Actuator.umax;
+    umin = obj.Actuator.umin;
+
     % Create the functions to be solved 
     Obj = @(x,z)( obj.objective(x, z) );
-    X_update = @(x,z,u)( obj.x_update(A, b, rho, x, z, u) );
-    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, rho, x, z, u) );
+    X_update = @(x,z,u)( obj.x_update(eA, eb, rho, x, z, u) );
+    Z_update = @(x,z,u)( obj.z_update(n, umin, umax, obj.Mission.N, rho, x, z, u) );
 
     % ADMM consensus constraint definition 
-    nx = n * N;
-    A = eye(nx);
+    A = Id;
     B = -A;        
-    c = zeros(nx,1);
 
     % Problem
     Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);

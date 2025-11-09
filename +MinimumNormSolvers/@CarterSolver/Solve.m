@@ -32,29 +32,49 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        cntrl_idx = 1 + n * (i - 1) :n * i;
+        cntrl_idx = 1 + n * (i - 1) : n * i;
         state_idx = 1 + m * (i - 1) : m * i;
 
-        Phi(:,cntrl_idx) = ( STM(:,state_idx) \ M ) * B(:,cntrl_idx);
+        Phi(:,cntrl_idx) = ( M / STM(:,state_idx) ) * B(:,cntrl_idx);
     end
 
     % Compute the initial missvector
     b = xf - M * x0;
 
     % Pre-factoring of constants
-    Atb = pinv(Phi) * b;
-    pInvA = eye(size(Phi,2)) - pinv(Phi) * Phi;
+    nx = 2 * n * N;
+    Id = eye(nx);
+    c = zeros(nx,1);
+
+    % Equilibration
+    if ( ~exist('equil_flag', 'var') )
+        equil_flag = true;
+    end
+
+    if ( equil_flag )
+        [~, ePhi, ~, D1, ~] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
+        eb = (D1 .* b.').';
+    else
+        eb = b; 
+        ePhi = Phi;
+    end
+
+    umin = obj.Actuator.umin;
+    umax = obj.Actuator.umax;
+
+    % Normal equations
+    invPhi = pinv(ePhi);
+    Atb = invPhi * eb;
+    pInvA = Id - invPhi * Phi;
 
     % Create the functions to be solved 
     Obj = @(x,z)( obj.objective(obj.Actuator.p, x) );
     X_update = @(x,z,u)( obj.x_update(n, obj.Actuator.q, pInvA, Atb, x, z, u) );
-    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.p, obj.Actuator.q, obj.Actuator.umin, obj.Actuator.umax, obj.Mission.N, Phi, b, rho, x, z, u) );
+    Z_update = @(x,z,u)( obj.z_update(n, obj.Actuator.p, obj.Actuator.q, umin, umax, obj.Mission.N, ePhi, eb, rho, x, z, u) );
 
     % ADMM consensus constraint definition 
-    nx = 2 * n * N;
-    A = eye(nx);
+    A = Id;
     B = -A;        
-    c = zeros(nx,1);
 
     % Problem
     Problem = ADMM_solver(Obj, X_update, Z_update, rho, A, B, c);

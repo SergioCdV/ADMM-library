@@ -11,12 +11,13 @@
 % Inputs:  - object obj, the Linear Rendezvous Problem object
 %          - scalar rho, the augmented Lagrangian penalty parameter (rho > 0)
 %          - scalar alpha, the overfitting parameter (2 > alpha > 0)
+%          - bool equil_flag, to use or not Ruiz equilibration
 
 % Outputs: - vector t, of dimensions 1 x N, at which the control is to be applied (maneuver execution times)
 %          - array u, of dimensions n x N, the control law to be applied (maneuver magnitudes)
 %          - vector e, of dimensions m x 1, the final rendezvous missvector
 
-function [t, u, e, obj] = Solve(obj, rho, alpha)
+function [t, u, e, obj] = Solve(obj, rho, alpha, equil_flag)
     % Preallocation 
     x0 = obj.Mission.x0;                    % Initial conditions 
     xf = obj.Mission.xf;                    % Final conditions 
@@ -32,10 +33,10 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     M = STM(:,1+m*(N-1):m*N);
 
     for i = 1:length(t)
-        stm_idx = 1 + m * (i - 1): m * i;
-        state_idx = 1 + n * (i - 1) : n * i;
+        state_idx = 1 + m * (i - 1): m * i;
+        cntrl_idx = 1 + n * (i - 1) : n * i;
 
-        Phi(:,state_idx) = ( M / STM(:,stm_idx) ) * B(:,state_idx);
+        Phi(:,cntrl_idx) = ( M / STM(:,state_idx) ) * B(:,cntrl_idx);
     end
 
     % Compute the initial missvector
@@ -47,8 +48,17 @@ function [t, u, e, obj] = Solve(obj, rho, alpha)
     c = zeros(nx,1);
 
     % Equilibration
-    [~, ePhi, ~, D1, ~] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
-    eb = (D1 .* b.').';
+    if ( ~exist('equil_flag', 'var') )
+        equil_flag = true;
+    end
+
+    if ( equil_flag )
+        [~, ePhi, ~, D1, ~] = src.RuizEquil( zeros(size(Phi,2),1), Phi, 1E-6, 'L' );
+        eb = (D1 .* b.').';
+    else
+        ePhi = Phi;
+        eb   = b;
+    end
 
     umax = obj.Actuator.umax;
     umin = obj.Actuator.umin;

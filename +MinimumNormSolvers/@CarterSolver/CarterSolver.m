@@ -27,7 +27,7 @@ classdef CarterSolver < MinimumNormSolvers.SolverMinimumNorm
         end
 
         % Solver
-        [t, u, e, obj] = Solve(obj, rho, alpha);
+        [t, u, e, obj] = Solve(obj, rho, alpha, equil_flag);
     end
 
     % ADMM functions
