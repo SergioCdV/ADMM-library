@@ -8,12 +8,37 @@
 %% Z update %% 
 % ADMM problem function to update the Z sequence via proximal minimization
 
-function [z] = z_update(n, og_idx, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, u)
+function [z] = z_update(m, n, Nopp, og_idx, q, b, ~, x, ~, u)
     % Constants
-    m = size(Phi,2);
     y = x + u;
 
-    % Projection of the primer vector on the unit+sigma lq-ball
+    % Lagrange multiplier update (projection on a half space)
+    lambda = y(1:m);
+    lambda = src.HalfSpaceProx.projection(b, 0, lambda);
+
+    % Projection onto the positive orthant of the Lagrange multipliers associated to the control bound
+    Tk = length(og_idx);               % Number of Lagrange multipliers
+    sigma = y(og_idx);
+    t = y(Tk + og_idx);                
+    
+    sigma = max(sigma, 0);
+    t = max(t, 0);
+
+    % Window bounds 
+    tj_idx = og_idx(end) + Tk + 1 : og_idx(end) + Tk + Nopp;
+    tj = y(tj_idx);
+
+    if ( size(tj,1) ~= 1 )
+        tj = tj.';
+    end
+
+    % Primer vectors
+    primer_idx = tj_idx(end) + 1 : length(x);
+
+    p = y(primer_idx);                 
+    p = reshape(p, n, []);
+
+    % Projection of the primer vector on the t_j lq-ball
     switch (q)
         case src.VectorNorm.L1
             handl_ = @(p, sigma)src.L1EpigraphProx.projection(1, p, sigma);
@@ -25,33 +50,9 @@ function [z] = z_update(n, og_idx, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, 
             handl_ = @(p, sigma)src.LinfEpigraphProx.projection(1, p, sigma);
     end
 
-    % Primer vectors
-    Tk = length(og_idx);               % Number of Lagrange multipliers
-
-    primer_idx = og_idx(end) + Tk + 1 : length(x);
-
-    p = y(primer_idx);                 % Primer vector
-    p = reshape(p, n, []);
-
-    % Vectorization of variables
-    t = y(Tk + og_idx);                % Lagrange multipliers associated to the control bound
-    t = t(sigma_map).';                % Lagrange multiplier associated to each impulse
-
-    if ( size(t,1) ~= 1 )
-        t = t.';
-    end
-
     % Projection onto the corresponding epigraph
-    [p, t] = handl_( p, t );
-
-    % Lagrange multiplier update (projection on a half space)
-    lambda = y(1:m);
-    lambda = src.HalfSpaceProx.projection(b, 0, lambda);
-
-    % Projection onto the positive orthant
-    sigma = y(og_idx);
-    sigma = max(sigma, 0);
+    [p, tj] = handl_( p, tj );
 
     % Final vector
-    z = [lambda; sigma; t(sigma_unique).'; reshape(p, [], 1)];
+    z = [lambda; sigma; t; reshape(tj, [], 1); reshape(p, [], 1)];
 end

@@ -10,7 +10,7 @@
 
 classdef DualBoundSolver < MinimumNormSolvers.NeustadtSolver
     properties (Access = private)
-        window_ratio = 1.0;            % Percentage of time windows over the grid
+        window_ratio = 0.10;            % Percentage of time windows over the grid
     end
 
     % Methods
@@ -27,7 +27,7 @@ classdef DualBoundSolver < MinimumNormSolvers.NeustadtSolver
     % ADMM functions
     methods (Static)
         [x] = x_update(Phi, c, idx, rho, x, z, u);
-        [z] = z_update(n, sigma_pos, sigma_map, sigma_unique, q, Phi, b, ~, x, ~, u);
+        [z] = z_update(m, n, Nopp, sigma_pos, q, b, ~, x, ~, u);
     end
 
 end

@@ -83,15 +83,17 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     GoOn    = Nopp >= 2;    % Boolean to control convergence
 
     while ( iter < maxIter && GoOn && Nopp > 0 )
-        % Primer vector linear system
+        % Constants of the iteration 
+        nx = m + n * Nopp;
         idx = 1 : n * Nopp;
+
+        % Primer vector linear system
         KronEye = -Id(idx,idx);                            
         pPhi = [curr_Phi KronEye];                                    
 
-        % Linear cost function at each iteration grid
-        nx = m + n * Nopp;
+        % Linear cost function
         v = vinit(1:nx);
-        b_dual = Os(1:sum(size(pPhi))-nx,1);
+        b_dual = Os(1:nx-m,1);
 
         % Equilibration 
         if ( equil_flag )
@@ -116,9 +118,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         Z_update = @(x,z,u)( obj.z_update(m, n, obj.Actuator.q, ev(1:m), rho, x, z, u) );
     
         % ADMM consensus constraint definition 
-        A = eye(nx);
+        A = Id(1:nx,1:nx);
         B = -A;        
-        c = zeros(nx,1);
+        c = Os(1:nx,1);
     
         % Problem solve
         Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);

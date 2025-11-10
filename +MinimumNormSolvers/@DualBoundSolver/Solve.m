@@ -78,7 +78,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         Slack = zeros(1,Tk);                                    % Original vector of slack Lagrange multipliers associated to the bound constraint
         
         % Constant matrices  << this is for speed in a computation unit with sufficient RAM
-        Nx = m + 2 * Tk + n * N;                                % Original number of variables
+        Nx = m + 2 * Tk + (n + 1) * N;                          % Original number of variables (lambda, sigma, t, t_i, p)
         Ones = ones(1,Nx);                                      % Vectors of 1
         Id   = eye(Nx);                                         % Identity matrix of n x n
         Os   = zeros(Nx);                                       % Zero matrix of nN x nN
@@ -88,12 +88,12 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         time_mask(edge_idx) = true;                             % Initial time mask
         Nopp = sum(time_mask);                                  % Number of impulsive opportunities 
 
+        % Complete cost function
+        vinit = [-b; +umax * ones(Tk,1); zeros(Tk,1); +Os(:,1); +Os(:,1)]; 
+
         % Local STM                 
         index    = kron(time_mask, Ones(1,1:n));                % Actuation epochs
         curr_Phi = Phi(logical(index),:);                       % STM corresponding to the new actuation grid  
-
-        % Complete cost function
-        vinit = [-b; +umax * ones(Tk,1); zeros(Tk,1); +Os(:,1)]; 
         
         % Index mapping of variables
         lambda_pos = 1 : m;                                     % Position of the Lagrange multiplier
@@ -101,7 +101,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         primer_pos = Nx + 1 - n * Nopp : Nx;                    % Position of the primer vector
         
         sigma_map  = tw_idx(time_mask);                         % Mapping between primer vector and Lagrange multipliers
-        [~, sigma_unique] = unique( sigma_map, 'first' );       % Mapping between primer vector and unique Lagrange multipliers
+%         [~, ~] = unique( sigma_map, 'first' );                  % Mapping between primer vector and unique Lagrange multipliers
 
         % Optimization of the Lagrange multiplier
         maxIter = 20;                                           % Maximum number of iterations
@@ -109,36 +109,52 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
         GoOn    = N >= 2;                                       % Boolean to control convergence
 
         while ( iter < maxIter && GoOn && Nopp > 0 )
-            % Primer vector linear system
-            KronEye = kron( eye(Nopp), -Id(1:n,1:n) );  
+            % Constants of the iteration 
+            nx = m + 2 * Tk + (n + 1) * Nopp;                                      % Number of decision variables
             idx = 1 : n * Nopp;
-            KronZero = Os(idx,1: 2 * Tk);
+            N_idx = 1:Nopp;
+            tk_idx = 1:Tk;
+            num_res = (n + 1) * Nopp + Tk;                                         % Number of linear restrictions
+            t_pos  = Tk + sigma_pos;                                               % Position of the slack variables
+            tk_pos = N_idx + t_pos(end);                                           % Position of the window slack variables
+
+            % Primer vector linear system
+            KronEye = -Id(idx,idx);  
+            KronZero = Os(idx, 1:2 * Tk + Nopp);
             primer_system = [curr_Phi KronZero KronEye];
 
             % Augmented slack variables system 
-            slack_system = [Os(1:Tk,1:m) -Id(1:Tk,1:Tk) Id(1:Tk,1:Tk) Os(1:Tk,idx)];
+            slack_system = [Os(tk_idx,1:m) -Id(tk_idx,tk_idx) Id(tk_idx,tk_idx) Os(tk_idx,N_idx) Os(tk_idx,idx)];
+
+            % Cone intersection system 
+            cone_system = Os(N_idx,1:nx);
+            tk_mask = t_pos( sigma_map );
+            for i = 1:Nopp
+                cone_system(i,tk_mask(i)) = +1;
+            end
+            cone_system(:,tk_pos) = -Id(N_idx,N_idx);
             
             % Pre-allocation of the pseudoinverse of the linear inverse
-            pPhi = [primer_system; slack_system];
-            Theta = [rho * eye(size(pPhi,2)) pPhi.'; pPhi zeros(size(pPhi,1))];
+            pPhi = [primer_system; slack_system; cone_system];
+            
+            % Linear cost function
+            v = vinit( [lambda_pos sigma_pos t_pos tk_pos primer_pos] );           % Current cost function
+
+            % Normal equation
+            Theta = [rho * Id(1:nx,1:nx) pPhi.'; pPhi Os(1:num_res,1:num_res)];
             Theta = pinv(Theta);
+            b_dual = [Os(idx,1); Ones(1,tk_idx).'; Os(N_idx,1)];                   % Independent term in the linear system
+            linear_cost = [v; -b_dual];                                            % KKT cost function
 
-            % Linear cost function at each iteration grid
-            nx = m + 2 * Tk + n * Nopp;                                            % Number of decision variables
-            v = vinit( [lambda_pos sigma_pos Tk + sigma_pos primer_pos] );         % Current cost function
-
-            linear_b = [zeros(size(Theta,1)-nx-Tk,1); Ones(1,1:Tk).'];             % Independent term in the linear system
-            linear_cost = [v; -linear_b];                                          % KKT cost function
-    
             % Create the functions to be solved 
             Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(v, z) );
             X_update = @(x,z,u)( obj.x_update( Theta, linear_cost, sigma_pos, rho, x, z, u ) );
-            Z_update = @(x,z,u)( obj.z_update( n, sigma_pos, sigma_map, sigma_unique, obj.Actuator.q, Phi, -b, rho, x, z, u ) );
+            Z_update = @(x,z,u)( obj.z_update( m, n, Nopp, sigma_pos, obj.Actuator.q, -b, rho, x, z, u ) );
         
             % ADMM consensus constraint definition 
-            A = eye(nx);
+            A = Id(1:nx,1:nx);
             B = -A;        
-            c = zeros(nx,1);
+            c = Os(1:nx,1);
         
             % Problem solve
             Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
@@ -154,18 +170,18 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             % Output
             lambda = x(lambda_pos,end);          % Lagrange multiplier
             sigma  = x(sigma_pos ,end);          % Lagrange multiplier associated to the control bound
-            slackT = x(Tk + sigma_pos,end);      % Slack variables associated to the Lagrange multipliers
+            slackT = x(t_pos,end);               % Slack variables associated to the Lagrange multipliers
             p      = Phi * lambda;               % Primer vector
-            p      = reshape(p, n, N);           % Primer vector
 
             % Update the complete set of Lagrange multipliers
             Sigma(unique_idx) = sigma;  
             Slack(unique_idx) = slackT;
             
             % Check for convergence
+            p      = reshape(p, n, N);                             % Primer vector
             p_norm = obj.Actuator.q.ComputeVectorNorm( p );        % Switching surface
           
-            if ( all( p_norm <= Slack(tw_idx) + epsilon ) && Output.Result )
+            if ( all( p_norm <= Slack(tw_idx) + epsilon ) )
                 % Convergence
                 GoOn = false;
             else
@@ -185,7 +201,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
                 end
     
                 % Update the time window
-                [unique_idx, sigma_unique, sigma_map] = unique( tw_idx( time_mask ), 'first' );
+                [unique_idx, ~, sigma_map] = unique( tw_idx( time_mask ), 'first' );
                 sigma_map = sigma_map.';
                 Tk = numel(unique_idx);
 
@@ -199,19 +215,18 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
                 curr_Phi = Phi(logical(index),:);                   % STM corresponding to the new actuation grid
 
                 % Update initial guess
-                p = curr_Phi * lambda;                              % Initial guess for the primer vector
+                p      = curr_Phi * lambda;                         % Initial guess for the primer vector
                 sigma  = Sigma(unique_idx);                         % Initial guess for the Lagrange multipliers
                 slackT = Slack(unique_idx);                         % Initial guess for the slack variables
+                tj     = slackT(sigma_map);                         % Window repetitions
 
-                init_guess.x = [lambda; sigma.'; slackT.'; reshape(p, [], 1)];
+                init_guess.x = [lambda; sigma.'; slackT.'; tj.'; p];
                 init_guess.z = init_guess.x;
 
                 % Update the iteration counter
                 iter = iter + 1;
             end
         end
-
-        Sigma
         
         % Computation of the control law
         if ( 1 )%~GoOn )
@@ -226,11 +241,13 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             for i = 1:length(t_pruned)
                 dV(:, t_pruned(i) == t) = dv(:,i);
             end
+
+            cost = obj.Actuator.p.ComputeVectorNorm( dV );
         
             % Output
             e = b - Phi.' * reshape(dV, [], 1);         % Regulation error
             obj.e(:,1) = e;                             % Final missvector   
-            obj.Cost = dot(b, lambda);                  % Final minimum-norm cost
+            obj.Cost = sum(cost);                       % Final minimum-norm cost
             obj.Report = Output;                        % Optimization report
             obj.u = dV;                                 % Final impulsive sequence
             obj.t = t;                                  % Execution times
