@@ -8,6 +8,6 @@
 %% Objective %% 
 % ADMM problem function to compute the fuel objective
 
-function [p] = objective(c, x)
-    p = -dot(c, x, 1); 
+function [p] = objective(nx, c, x)
+    p = -dot(c, x(1:nx), 1); 
 end

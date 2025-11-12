@@ -5,7 +5,7 @@
 % Issue: 0 
 % Validated: 
 
-%% Neustadt Solver %% 
+%% Sparse Neustadt Solver %% 
 % Main solver function %
 
 % Inputs:  - object obj, the Linear Rendezvous Problem object
@@ -105,22 +105,24 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             eb_dual = b_dual;
         end
 
-        % Dual linear system
-        linear_cost = [ev; -eb_dual];
-        Theta = [rho * Id(1:nx,1:nx) epPhi.'; epPhi Os(idx,idx)];
-
-        % Normal equations
-        invTheta = pinv(Theta);
+        % UV factorization
+        [U,V] = src.DecompositionUV( epPhi );
+        num_sparse = size( V,2 );
+        Ids = eye(num_sparse);
+        Fu = 1 + diag(U * U.');
+        Fu = Ids - U.' * diag(1./Fu) * U;
+        Fv = diag( Id(1:nx,1:nx) + V * V.' );
+        F = Fu * [U.' Ids];
     
         % Create the functions to be solved 
-        Obj = @(x,z)( obj.objective(nx, ev, z) );
-        X_update = @(x,z,u)( obj.x_update(invTheta, linear_cost, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update(m, n, obj.Actuator.q, ev(1:m), rho, x, z, u) );
+        Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(nx, ev, z) );
+        X_update = @(x,z,u)( obj.x_update(Fv, [Id(1:nx,1:nx) V], ev, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update(m, n, nx, obj.Actuator.q, ev(1:m), eb_dual, F, rho, x, z, u) );
     
         % ADMM consensus constraint definition 
-        A = Id(1:nx,1:nx);
-        B = -A;        
-        c = Os(1:nx,1);
+        A = [Id(1:nx,1:nx); V.'];
+        B = -Id(1:nx+num_sparse,1:nx+num_sparse);        
+        c = Os(1:nx + num_sparse,1);
     
         % Problem solve
         Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
@@ -130,7 +132,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
         % Solve the problem
         tic
-        [x, ~, Output] = Solv.solver();
+        [x, z, Output] = Solv.solver();
         obj.SolveTime = toc;
 
         % Output
@@ -163,7 +165,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             % Update initial guess 
             p = curr_Phi * lambda;                          % New primer vector initial guess
             init_guess.x = [lambda; reshape(p, [], 1)];    
-            init_guess.z = init_guess.x; 
+            init_guess.z = z(:,end); 
 
             % Update the iteration counter
             iter = iter + 1;
@@ -176,7 +178,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         u = [lambda; Phi * lambda];                 % Adjoint vector at final epoch and primer vector
 
         % Input reconstruction 
-        [t_pruned, dv] = obj.ImpulseReconstruction(t, b, Phi, p_norm, 1, epsilon);
+        [t_pruned, dv] = MinimumNormSolvers.NeustadtSolver.ImpulseReconstruction(t, b, Phi, p_norm, 1, epsilon);
 
         % Complete action sequence
         dV = zeros( n, length(t) );               

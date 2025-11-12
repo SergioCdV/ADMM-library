@@ -147,7 +147,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess)
             linear_cost = [v; -b_dual];                                            % KKT cost function
 
             % Create the functions to be solved 
-            Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(v, z) );
+            Obj = @(x,z)( MinimumNormSolvers.NeustadtSolver.objective(nx, v, z) );
             X_update = @(x,z,u)( obj.x_update( Theta, linear_cost, sigma_pos, rho, x, z, u ) );
             Z_update = @(x,z,u)( obj.z_update( m, n, Nopp, sigma_pos, obj.Actuator.q, -b, rho, x, z, u ) );
         

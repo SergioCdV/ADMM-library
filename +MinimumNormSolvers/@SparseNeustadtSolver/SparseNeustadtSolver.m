@@ -1,14 +1,14 @@
 %% Optimal control by ADMM %% 
 % Sergio Cuevas del Valle
-% Date: 28/08/23
-% File: NeustadtSolver.m 
+% Date: 11/11/25
+% File: SparseNeustadtSolver.m 
 % Issue: 0 
 % Validated: 
 
-%% Neustadt Solver %% 
+%% Sparse Neustadt Solver %% 
 % Implementation of a object-oriented solver for minimum norm problems via ADMM
 
-classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
+classdef SparseNeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
     % Basic properties
     properties
         t;                  % Execution clocks
@@ -22,7 +22,7 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
     % Methods
     methods
         % Constructor
-        function [obj] = NeustadtSolver(myMission, myActuator)
+        function [obj] = SparseNeustadtSolver(myMission, myActuator)
             obj@MinimumNormSolvers.SolverMinimumNorm(myMission, myActuator);
         end
 
@@ -32,12 +32,8 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
 
     methods (Static)
         % ADMM functions
-        [p] = objective(nx, c, x);
-        [x] = x_update(Phi, c, rho, x, z, u);
-        [z] = z_update(m, n, q, b, rho, x, z, u);
-        
-        % Input reconstruction
-        [t, u] = ImpulseReconstruction(t, b, Y, p_norm, a, epsilon)
+        [x] = x_update(F, V, c, rho, x, z, u);
+        [z] = z_update(m, n, nx, q, c, b, F, rho, x, z, u);
     end
 
 end
