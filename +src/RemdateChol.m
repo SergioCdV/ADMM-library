@@ -1,6 +1,13 @@
+%% ADMM Library %% 
+% Sergio Cuevas del Valle
+% Date: 26/11/25
+% File: RemdateChol.m 
+% Issue: 0 
+% Validated:
 
+%% Remove-downdate Cholesky factor %%
+% This function updates a Cholesky factor whenever a row of the original matrix is deleted
 
-% Update Cholesky factor whenever a row is deleted
 function [Lnew] = RemdateChol(L, k)
     % Make a copy of the previous matrix
     H = L;
