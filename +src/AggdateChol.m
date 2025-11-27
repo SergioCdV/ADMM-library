@@ -8,7 +8,7 @@
 %% Aggregate-update Cholesky factor %%
 % This function updates a Cholesky factor whenever a row is added to the original matrix
 
-function [Lnew] = AggdateChol(L, A, Atilde)
+function [Lnew, Anew] = AggdateChol(L, A, Atilde)
     % Update of the Cholesky factor
     opts.LT = true;
 
@@ -16,8 +16,16 @@ function [Lnew] = AggdateChol(L, A, Atilde)
     S22     = Atilde * Atilde.';
     Y       = linsolve(L, S12, opts); 
     S22p    = S22 - Y.' * Y; 
-    Lnew    = chol(S22p, "lower");
-    
-    % Final factor
-    Lnew = [L zeros(); Y.' Lnew];
+
+    Anew = [A; Atilde];
+
+    try        
+        % Final factor
+        Lnew = chol(S22p, "lower");
+        O    = zeros( size(L,1), size(Lnew,2) );
+        Lnew = [L O; Y.' Lnew];
+
+    catch
+        Lnew = chol( Anew * Anew.', "lower");
+    end
 end

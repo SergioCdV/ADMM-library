@@ -33,7 +33,7 @@ classdef NeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
     methods (Static)
         % ADMM functions
         [p] = objective(nx, c, x);
-        [x] = x_update(Phi, c, rho, x, z, u);
+        [x] = x_update(Phi2, Phi, A, c, b, rho, x, z, u);
         [z] = z_update(m, n, q, b, rho, x, z, u);
         
         % Input reconstruction

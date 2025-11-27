@@ -44,8 +44,10 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     m = obj.Mission.m;                      % State vector dimension
     n = obj.Mission.n;                      % Control input dimension
 
+    LambdaIdx = 1 : m;
+
     Phi = zeros(size(B,2), size(STM,1));    % Pre-allocation of the STM
-    Phi0 = STM(:,1:m);                      % Initial STM
+    Phi0 = STM(:,LambdaIdx);                % Initial STM
 
     % Compute the STM
     for i = 1:length(t)
@@ -66,61 +68,71 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     % Initial indices 
     time_mask = logical( Os(1,1:N) );
     time_mask([1 floor(N/2) end]) = true; 
+    time_idx = 1 : N; 
 
     % Number of impulsive opportunities 
     Nopp = sum(time_mask);
 
     % Local STM 
-    index    = kron(time_mask, Ones);               % Actuation epochs
-    curr_Phi = Phi(logical(index),:);               % STM corresponding to the new actuation grid
+    currPhi = PartitionSTM(time_mask, Ones, Phi);
+    
+    % Complete primer vector system 
+    KronEye = -Id(1:n*N,1:n*N);      
+    pPhi    = [Phi KronEye];   
 
     % Cost function
     vinit = [-b; -Os(:,1)];
+
+    % Equilibration 
+    if ( equil_flag )
+        [ev, egPhi, ~, ~, ~] = src.RuizEquil( vinit, pPhi, 1E-6, 'L' );
+    else
+        ev        = vinit;
+        egPhi     = pPhi;
+    end
 
     % Optimization of the Lagrange multiplier
     maxIter = 20;           % Maximum number of iterations
     iter    = 1;            % Current iteration index
     GoOn    = Nopp >= 2;    % Boolean to control convergence
 
+    tic
     while ( iter < maxIter && GoOn && Nopp > 0 )
         % Constants of the iteration 
-        nx = m + n * Nopp;
-        idx = 1 : n * Nopp;
-
-        % Primer vector linear system
-        KronEye = -Id(idx,idx);                            
-        pPhi = [curr_Phi KronEye];                                    
+        dimPrimer = n * Nopp;
+        idx = 1 : dimPrimer;
+        nx  = m + dimPrimer;
+        NxIdx = 1 : nx;                                
 
         % Linear cost function
-        v = vinit(1:nx);
-        b_dual = Os(1:nx-m,1);
+        v        = ev(NxIdx);
+        b_primer = Os(idx,1);
 
-        % Equilibration 
-        if ( equil_flag )
-            [ev, epPhi, ~, D1, ~] = src.RuizEquil( v, pPhi, 1E-6, 'L' );
-            eb_dual = (D1 .* b_dual.').';
+        if ( iter == 1 )
+            % Initial linear system 
+            epPhi = PartitionSTM(time_mask, Ones, egPhi);
+            idx = logical([1:m kron(time_mask,Ones)]);
+            epPhi = epPhi(:,idx);
+
+            % Initial Cholesky decomposition
+            cholPhi = chol(epPhi * epPhi.', "lower");
+
         else
-            ev = v;
-            epPhi = pPhi;
-            eb_dual = b_dual;
+            % Update initial guess 
+            p            = currPhi * lambda;                         
+            init_guess.x = [lambda; reshape(p, [], 1)];    
+            init_guess.z = init_guess.x;
         end
-
-        % Dual linear system
-        linear_cost = [ev; -eb_dual];
-        Theta = [rho * Id(1:nx,1:nx) epPhi.'; epPhi Os(idx,idx)];
-
-        % Normal equations
-        invTheta = pinv(Theta);
     
         % Create the functions to be solved 
-        Obj = @(x,z)( obj.objective(nx, ev, z) );
-        X_update = @(x,z,u)( obj.x_update(invTheta, linear_cost, rho, x, z, u) );
-        Z_update = @(x,z,u)( obj.z_update(m, n, obj.Actuator.q, ev(1:m), rho, x, z, u) );
+        Obj      = @(x,z)  ( obj.objective(nx, v, z) );
+        X_update = @(x,z,u)( obj.x_update(cholPhi, epPhi, v, -b_primer, rho, x, z, u) );
+        Z_update = @(x,z,u)( obj.z_update(m, n, obj.Actuator.q, v(1:m), rho, x, z, u) );
     
         % ADMM consensus constraint definition 
-        A = Id(1:nx,1:nx);
+        A = Id(NxIdx,NxIdx);
         B = -A;        
-        c = Os(1:nx,1);
+        c = Os(NxIdx,1);
     
         % Problem solve
         Solv = src.SolverADMM(Obj, X_update, Z_update, rho, A, B, c, init_guess);
@@ -129,12 +141,10 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         Solv.QUIET = false;
 
         % Solve the problem
-        tic
         [x, ~, Output] = Solv.solver();
-        obj.SolveTime = toc;
 
         % Output
-        lambda = reshape(x(1:m,end), 1, []).';          % Lagrange multiplier
+        lambda = reshape(x(LambdaIdx,end), 1, []).';    % Lagrange multiplier
         p = Phi * lambda;                               % Primer vector
         p = reshape(p, n, N);                           % Primer vector
         
@@ -142,28 +152,56 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         p_norm = obj.Actuator.q.ComputeVectorNorm( p ); % Switching surface
         [max_p, pos] = sort(p_norm);
 
-        if ( max_p(end) <= 1 + epsilon && Output.Result )
+        if ( max_p(end) <= 1 + epsilon )
             % Convergence
             GoOn = false;
         else
             % Include the new maximum 
+            old_mask = time_mask;
             time_mask( pos(end) ) = true;
 
             % Do not include the non-plausible actuation epochs
             index = p_norm < 1 - epsilon;                
             time_mask( index ) = 0;
 
+            % Complete matrix
+            currPhi = PartitionSTM(time_mask, Ones, Phi);
+
+            % Downdate the STM
+            rem_pos = old_mask & ~time_mask;
+            rem_pos = time_idx( rem_pos );
+            old_pos = time_idx( old_mask );
+            Nrm = length( rem_pos );
+
+            if ( Nrm > 0 )
+                rem_pos = find( ismember( old_pos, rem_pos ), Nrm );
+                rem_pos = (rem_pos-1) * n + (1:n).'; 
+                rem_pos = rem_pos(:).';
+
+                % Update the Cholesky factor
+                cholPhi = src.RemdateChol( cholPhi, rem_pos );
+
+                epPhi(rem_pos,:) = [];              % Delete rows 
+                rem_pos          = m + rem_pos;     % Column indices
+                epPhi(:,rem_pos) = [];              % Delete columns
+
+                Nrm = n * Nrm;                      % Number of removed variables
+            end
+
+            % Update STM 
+            idx     = time_mask & ~old_mask;
+            Npls    = sum(idx);
+            newPhi  = PartitionSTM(idx, Ones, Phi);
+
+            idx     = 1 : n * Npls;
+            newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
+            epPhi   = [epPhi Os(1:nx-m-Nrm,idx)];
+
+            % Update of the Cholesky decomposition of the STM inverse
+            [cholPhi, epPhi] = src.AggdateChol( cholPhi, epPhi, newPhi );
+            
             % Number of impulsive opportunities 
             Nopp = sum(time_mask);
-
-            % Local STM 
-            index    = kron(time_mask, Ones);               % Actuation epochs
-            curr_Phi = Phi(logical(index),:);               % STM corresponding to the new actuation grid
-
-            % Update initial guess 
-            p = curr_Phi * lambda;                          % New primer vector initial guess
-            init_guess.x = [lambda; reshape(p, [], 1)];    
-            init_guess.z = init_guess.x; 
 
             % Update the iteration counter
             iter = iter + 1;
@@ -171,7 +209,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     end
 
     % Computation of the control law
-    if ( ~GoOn )
+    if ( 1) %~GoOn )
         % Final output 
         u = [lambda; Phi * lambda];                 % Adjoint vector at final epoch and primer vector
 
@@ -201,4 +239,11 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         u  = zeros(m + n * N,1); 
         e  = b;
     end
+    obj.SolveTime = toc;
+end
+
+%% Auxiliary functions 
+function [A] = PartitionSTM(mask, ones, Phi)
+    index = kron(mask, ones);                    % Actuation epochs
+    A     = Phi(logical(index),:);               % STM corresponding to the new actuation grid
 end

@@ -21,7 +21,7 @@ function [Lnew] = RemdateChol(L, k)
         H(idx,:) = [];
     
         % Do Givens rotations along the required non-diagonal terms 
-        H = GivensRotation( H, idx );
+        H = src.GivensRotation( H, idx );
 
         % Finally, delete the last row and column 
         H = H(:,1:end-1);

@@ -8,10 +8,17 @@
 %% X update %% 
 % ADMM problem function to update the X sequence via proximal minimization
 
-function [x] = x_update(Phi, c, rho, ~, z, u)
-   % Linear quadratic problem
-   nx = size(z,1);
-   c(1:nx) = c(1:nx) - rho * (z - u);
-   x = -Phi * c;
-   x = x(1:nx);
+function [x] = x_update(Phi, A, q, b, rho, ~, z, u)
+    % Linear quadratic problem
+    v = z - u;
+    
+    opts.LT = true;
+    lambda = rho * (A * v - b) - A * q;
+    lambda = linsolve(Phi, lambda, opts);
+    
+    opts.LT = false; 
+    opts.UT = true;
+    lambda = linsolve(Phi.', lambda, opts);
+    
+    x = v - (q + A.' * lambda) / rho;
 end
