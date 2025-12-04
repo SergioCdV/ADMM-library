@@ -191,14 +191,17 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             % Update STM 
             idx     = time_mask & ~old_mask;
             Npls    = sum(idx);
-            newPhi  = PartitionSTM( idx, Ones, egPhi(:,LambdaIdx) );
 
-            idx     = 1 : n * Npls;
-            newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
-            epPhi   = [epPhi Os(1:nx-m-Nrm,idx)];
-
-            % Update of the Cholesky decomposition of the STM inverse
-            [cholPhi, epPhi] = src.AggdateChol( cholPhi, epPhi, newPhi );
+            if ( Npls > 0 )
+                newPhi  = PartitionSTM( idx, Ones, egPhi(:,LambdaIdx) );
+    
+                idx     = 1 : n * Npls;
+                newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
+                epPhi   = [epPhi Os(1:nx-m-Nrm,idx)];
+    
+                % Update of the Cholesky decomposition of the STM inverse
+                [cholPhi, epPhi] = src.AggdateChol( cholPhi, epPhi, newPhi );
+            end
             
             % Number of impulsive opportunities 
             Nopp = sum(time_mask);

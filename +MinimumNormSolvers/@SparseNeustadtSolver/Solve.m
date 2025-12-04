@@ -72,9 +72,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
     % Number of impulsive opportunities 
     Nopp = sum(time_mask);
-
-    % Local STM 
-    currPhi = PartitionSTM(time_mask, Ones, Phi);
     
     % Complete primer vector system 
     KronEye = -Id(1:n*N,1:n*N);      
@@ -90,6 +87,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         ev        = vinit;
         egPhi     = pPhi;
     end
+
+    % Local STM 
+    currPhi = PartitionSTM( time_mask, Ones, egPhi(:,LambdaIdx) );
 
     % Optimization of the Lagrange multiplier
     maxIter = 20;           % Maximum number of iterations
@@ -110,26 +110,23 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
         if ( iter == 1 )
             % Initial linear system 
-            epPhi = PartitionSTM(time_mask, Ones, egPhi);
-            idx = logical([1:m kron(time_mask,Ones)]);
+            epPhi = PartitionSTM( time_mask, Ones, egPhi );
+            idx   = logical([1:m kron(time_mask,Ones)]);
             epPhi = epPhi(:,idx);
-
-            % Initial Cholesky decomposition
-%             cholPhi = chol(epPhi * epPhi.', "lower");
 
             % Initial UV decomposition 
             [U, V] = src.DecompositionUV( epPhi );
-
-            num_sparse = size( V,2 );
-            Fu = 0 + diag( U * U.' );
-            Fv = 1 + diag( V * V.' );
-
         else
             % Update initial guess 
             p            = currPhi * lambda;                         
             init_guess.x = [lambda; reshape(p, [], 1)];    
             init_guess.z = init_guess.x;
         end
+
+        % Decomposition products 
+        num_sparse = size(V, 2);
+        Fu = 0 + diag( U * U.' );
+        Fv = 1 + diag( V * V.' );
 
         % ADMM consensus constraint definition 
         total_var = nx + num_sparse;
@@ -154,7 +151,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
         % Output
         lambda = reshape(x(LambdaIdx,end), 1, []).';    % Lagrange multiplier
-        p = Phi * lambda;                               % Primer vector
+        p = egPhi(:,LambdaIdx) * lambda;                % Primer vector
         p = reshape(p, n, N);                           % Primer vector
         
         % Check for convergence
@@ -170,44 +167,56 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             time_mask( pos(end) ) = true;
 
             % Do not include the non-plausible actuation epochs
-            index = p_norm < 1 - epsilon;                
-            time_mask( index ) = 0;
+%             index = p_norm < 1 - epsilon;                
+%             time_mask( index ) = 0;
 
             % Complete matrix
-            currPhi = PartitionSTM(time_mask, Ones, Phi);
+            currPhi = PartitionSTM( time_mask, Ones, egPhi(:,LambdaIdx) );
 
-            % Downdate the STM
-            rem_pos = old_mask & ~time_mask;
-            rem_pos = time_idx( rem_pos );
-            old_pos = time_idx( old_mask );
-            Nrm = length( rem_pos );
-
+%             % Downdate the STM
+%             rem_pos = old_mask & ~time_mask;
+%             rem_pos = time_idx( rem_pos );
+%             old_pos = time_idx( old_mask );
+%             Nrm = length( rem_pos );
+            Nrm = 0;
             if ( Nrm > 0 )
                 rem_pos = find( ismember( old_pos, rem_pos ), Nrm );
                 rem_pos = (rem_pos-1) * n + (1:n).'; 
                 rem_pos = rem_pos(:).';
 
-                % Update the Cholesky factor
-                cholPhi = src.RemdateChol( cholPhi, rem_pos );
-
+                % Update the original matrix and the decomposition
                 epPhi(rem_pos,:) = [];              % Delete rows 
                 rem_pos          = m + rem_pos;     % Column indices
                 epPhi(:,rem_pos) = [];              % Delete columns
+
+
 
                 Nrm = n * Nrm;                      % Number of removed variables
             end
 
             % Update STM 
+            time_mask(2) = true;
             idx     = time_mask & ~old_mask;
             Npls    = sum(idx);
-            newPhi  = PartitionSTM(idx, Ones, Phi);
+            
+            if ( Npls > 0 )
+                newPhi  = PartitionSTM( idx, Ones, egPhi(:,LambdaIdx) );
+    
+                idx     = 1 : n * Npls;
+                newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
+                epPhi   = [epPhi Os(1:nx-m-Nrm,idx)];
+                epPhi   = [epPhi; newPhi];
+    
+                % Update the decomposition
+                [Unew, Vnew] = src.DecompositionUV( newPhi );
 
-            idx     = 1 : n * Npls;
-            newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
-            epPhi   = [epPhi Os(1:nx-m-Nrm,idx)];
+                idx_sparse = 1:num_sparse;
+                U = [U Os(1:dimPrimer,1:size(Unew,2)); Os(idx,idx_sparse) Unew];
+                Vnew = [Os(1:size(Vnew,1),idx_sparse); Vnew];
+                V = [V Vnew];
 
-            % Update of the Cholesky decomposition of the STM inverse
-            [cholPhi, epPhi] = src.AggdateChol( cholPhi, epPhi, newPhi );
+                num_sparse = size(V,2);
+            end
             
             % Number of impulsive opportunities 
             Nopp = sum(time_mask);

@@ -77,7 +77,7 @@ myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
-myDualProblem   = MinimumNormSolvers.NeustadtSolver(myMission, myThruster);
+myDualProblem   = MinimumNormSolvers.SparseNeustadtSolver(myMission, myThruster);
 myPrimalProblem = MinimumNormSolvers.PrimalSolver(myMission, myThruster);
 
 iter = 1;                           % Number of interations
