@@ -72,9 +72,6 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
     % Number of impulsive opportunities 
     Nopp = sum(time_mask);
-
-    % Local STM 
-    currPhi = PartitionSTM(time_mask, Ones, Phi);
     
     % Complete primer vector system 
     KronEye = -Id(1:n*N,1:n*N);      
@@ -90,6 +87,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
         ev        = vinit;
         egPhi     = pPhi;
     end
+
+    % Local STM 
+    currPhi = PartitionSTM( time_mask, Ones, egPhi(:,LambdaIdx) );
 
     % Optimization of the Lagrange multiplier
     maxIter = 20;           % Maximum number of iterations
@@ -110,8 +110,8 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
         if ( iter == 1 )
             % Initial linear system 
-            epPhi = PartitionSTM(time_mask, Ones, egPhi);
-            idx = logical([1:m kron(time_mask,Ones)]);
+            epPhi = PartitionSTM( time_mask, Ones, egPhi );
+            idx   = logical([1:m kron(time_mask,Ones)]);
             epPhi = epPhi(:,idx);
 
             % Initial Cholesky decomposition
@@ -145,7 +145,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
         % Output
         lambda = reshape(x(LambdaIdx,end), 1, []).';    % Lagrange multiplier
-        p = Phi * lambda;                               % Primer vector
+        p = egPhi(:,LambdaIdx) * lambda;                % Primer vector
         p = reshape(p, n, N);                           % Primer vector
         
         % Check for convergence
@@ -165,7 +165,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             time_mask( index ) = 0;
 
             % Complete matrix
-            currPhi = PartitionSTM(time_mask, Ones, Phi);
+            currPhi = PartitionSTM( time_mask, Ones, egPhi(:,LambdaIdx) );
 
             % Downdate the STM
             rem_pos = old_mask & ~time_mask;
@@ -191,7 +191,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
             % Update STM 
             idx     = time_mask & ~old_mask;
             Npls    = sum(idx);
-            newPhi  = PartitionSTM(idx, Ones, Phi);
+            newPhi  = PartitionSTM( idx, Ones, egPhi(:,LambdaIdx) );
 
             idx     = 1 : n * Npls;
             newPhi  = [newPhi Os(idx,1:nx-m-Nrm) -Id(idx,idx)];
@@ -211,7 +211,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     % Computation of the control law
     if ( 1) %~GoOn )
         % Final output 
-        u = [lambda; Phi * lambda];                 % Adjoint vector at final epoch and primer vector
+        u = [lambda; egPhi(:,LambdaIdx) * lambda];                 % Adjoint vector at final epoch and primer vector
 
         % Input reconstruction 
         [t_pruned, dv] = obj.ImpulseReconstruction(t, b, Phi, p_norm, 1, epsilon);
