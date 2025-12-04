@@ -51,7 +51,7 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
 
     % Compute the STM
     for i = 1:length(t)
-        idx = 1+n*(i-1):n*i;
+        idx = 1 + n * (i - 1) : n * i;
         Phi(idx,:) = ( STM(:,1+m*(i-1):m*i) \ B(:,idx) ).';
     end
 

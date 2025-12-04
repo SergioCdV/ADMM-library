@@ -32,8 +32,8 @@ classdef SparseNeustadtSolver < MinimumNormSolvers.SolverMinimumNorm
 
     methods (Static)
         % ADMM functions
-        [x] = x_update(F, V, c, rho, x, z, u);
-        [z] = z_update(m, n, nx, q, c, b, F, rho, x, z, u);
+        [x] = x_update(F, V, c, nx, rho, x, z, u);
+        [z] = z_update(m, n, nx, q, c, A, U, b, rho, x, z, u);
     end
 
 end
