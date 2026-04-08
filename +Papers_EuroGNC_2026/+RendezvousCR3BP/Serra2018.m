@@ -73,7 +73,7 @@ myMission = Missions.FuelMission(nu, Phi, B, x0, xf, K);       % Mission
 %% Thruster definition 
 dVmin = 0;                                              % Minimum control authority
 dVmax = Inf;                                            % Maximum control authority
-myThruster = Actuator(src.VectorNorm.L2, dVmin, dVmax);
+myThruster = Actuator(src.VectorNorm.L1, dVmin, dVmax);
 
 %% Optimization
 % Define the ADMM problem 
@@ -86,20 +86,20 @@ dV = zeros(3 * 2, N);               % Impulses of the two algorithms
 
 % Optimization
 rho = 1/N;                          % AL parameter 
-eps = 1E-5;                         % Numerical tolerance
+eps = 1E-3;                         % Numerical tolerance
 
 for i = 1:iter
     % Dual resolution
-    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(1/2));
+    [~, sol, ~, myDualProblemSolved] = myDualProblem.Solve(eps, rho^(3/2));
     time(1,i) = myDualProblemSolved.SolveTime;
 
     lambda = reshape(sol(1:6), 6, []);
     p = reshape(sol(7:end), 3, []);
     dV(1:3,:) = myDualProblemSolved.u;
 
-%     % Primal resolution
-%     [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
-%     time(2,i) = myPrimalProblemSolved.SolveTime;
+    % Primal resolution
+    [~, dV(4:6,:), ~, myPrimalProblemSolved] = myPrimalProblem.Solve( 1/rho );
+    time(2,i) = myPrimalProblemSolved.SolveTime;
 end
 
 %% Outcome
@@ -154,7 +154,7 @@ dim = [Lc Lc Lc Vc Vc Vc];
 s = s .* repmat([dim dim], N, 1) / 1e3;
 
 %% Save results 
-save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2100
+% save +Papers_EuroGNC_2026\+RendezvousCR3BP\ResultsSerraL2100
 
 %% Results 
 % Norm of the primer vector

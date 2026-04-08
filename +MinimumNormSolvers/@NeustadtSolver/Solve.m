@@ -61,9 +61,9 @@ function [t, u, e, obj] = Solve(obj, epsilon, rho, alpha, init_guess, equil_flag
     b = (M \ xf) - (Phi0 \ x0);
 
     % Constant matrices  << this is for speed in a computation unit with sufficient RAM
-    Ones = ones(1,n);       % Vectors of 1
-    Id   = eye(n * N);      % Identity matrix of n * N x n * N
-    Os   = zeros(n * N);    % Zero matrix of n * N x n * N
+    Ones = ones(1,n);           % Vectors of 1
+    Id   = eye(m + n * N);      % Identity matrix of n * N x n * N
+    Os   = zeros(m + n * N);    % Zero matrix of n * N x n * N
 
     % Initial indices 
     time_mask = logical( Os(1,1:N) );
